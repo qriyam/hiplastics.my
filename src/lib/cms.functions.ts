@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { enforceRateLimit } from "./rate-limit";
 
 export type Product = {
   id: string;
@@ -450,6 +451,7 @@ export const adminLogin = createServerFn({ method: "POST" })
     z.object({ email: z.string().email().max(160), password: z.string().min(6).max(200) }).parse(d),
   )
   .handler(async ({ data }) => {
+    enforceRateLimit(`admin-login:${data.email.trim().toLowerCase()}`, 8, 15 * 60_000);
     try {
       const { getAdminClient } = await import("@/integrations/hiplastics/admin.server");
       const admin = getAdminClient();

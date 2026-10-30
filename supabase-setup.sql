@@ -711,6 +711,16 @@ alter table hiplastics.reviews enable row level security;
 drop policy if exists "public read approved reviews" on hiplastics.reviews;
 create policy "public read approved reviews" on hiplastics.reviews for select using (is_approved = true);
 
+-- Public catalogue pages only need rating aggregates. Never expose the raw
+-- review table to anon because it contains customer_email.
+revoke select on hiplastics.reviews from anon;
+revoke select on hiplastics.reviews from authenticated;
+create or replace view hiplastics.public_review_ratings as
+  select product_slug, rating
+  from hiplastics.reviews
+  where is_approved = true;
+grant select on hiplastics.public_review_ratings to anon, authenticated;
+
 -- 3) Backfill: normalize any customer_phone values stored without the +60
 --    country code, so existing orders' WhatsApp buttons start working too.
 update hiplastics.orders
@@ -797,4 +807,3 @@ alter table hiplastics.products add column if not exists features_ms text[] not 
 -- applies for qty 1.
 -- ============================================================================
 alter table hiplastics.products add column if not exists price_tiers jsonb not null default '[]';
-

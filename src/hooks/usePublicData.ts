@@ -23,11 +23,11 @@ const FALLBACK_SETTINGS: PublicSettings = {
   id: 1,
   name: "Hiplastics",
   tagline: "ECO LEAN ♥ SOUL",
-  whatsapp_number: "8618060555061",
-  whatsapp_display: "+86 180 6055 5061",
-  phone: "18060555061",
-  email: "sales@hiplastics.com",
-  address: "Hiplastics, China",
+  whatsapp_number: "601115526527",
+  whatsapp_display: "+60 11-1552 6527",
+  phone: "+601115526527",
+  email: "sales@hiplastics.my",
+  address: "Kuala Lumpur, Malaysia",
   facebook_url: "",
   linkedin_url: "",
   instagram_url: "",
@@ -57,7 +57,7 @@ async function fetchPublicDataFromBrowser() {
     supabase.from("gallery").select("*").eq("is_active", true).order("sort_order"),
     supabase.from("downloads").select("*").eq("is_active", true).order("sort_order"),
     supabase.from("news").select("*").eq("is_active", true).order("published_at", { ascending: false }),
-    supabase.from("reviews").select("product_slug, rating").eq("is_approved", true),
+    supabase.from("public_review_ratings").select("product_slug, rating"),
   ]);
 
   const failed = [settings, products, categories, industries, gallery, downloads, news, reviewRatings].find(

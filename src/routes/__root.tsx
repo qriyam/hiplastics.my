@@ -14,7 +14,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { site, SITE_URL } from "@/lib/site";
 import { CartProvider } from "@/lib/cart";
 import { AuthProvider } from "@/lib/auth";
-import { LanguageProvider } from "@/lib/i18n";
+import { LanguageProvider, useLang } from "@/lib/i18n";
 import { ConfirmProvider } from "@/components/ConfirmDialog";
 import { CartDrawer } from "@/components/CartDrawer";
 import { Toaster } from "@/components/ui/sonner";
@@ -112,6 +112,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         : []),
       { property: "og:site_name", content: "Hiplastics Malaysia" },
       { property: "og:type", content: "website" },
+      { property: "og:url", content: SITE_URL },
+      { property: "og:image", content: `${SITE_URL}/og-image.jpg` },
       { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [
@@ -156,6 +158,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <LanguageProvider>
+        <LanguageHtmlSync />
         <AuthProvider>
           <CartProvider>
             <WishlistProvider>
@@ -172,4 +175,12 @@ function RootComponent() {
       </LanguageProvider>
     </QueryClientProvider>
   );
+}
+
+function LanguageHtmlSync() {
+  const { lang } = useLang();
+  useEffect(() => {
+    document.documentElement.lang = lang === "ms" ? "ms" : "en";
+  }, [lang]);
+  return null;
 }

@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { trackAddToCart } from "./analytics";
 
 export type CartItem = {
   slug: string;
@@ -58,7 +59,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
       subtotal,
       open,
       setOpen,
-      add: (item, qty = 1) =>
+      add: (item, qty = 1) => {
+        trackAddToCart({ id: item.slug, name: item.name, price: item.price, quantity: qty });
         setItems((prev) => {
           const cap = item.stock !== undefined ? Math.max(0, item.stock) : 999;
           const found = prev.find((p) => p.slug === item.slug);
@@ -69,7 +71,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
                 : p,
             );
           return [...prev, { ...item, qty: Math.min(cap, qty) }];
-        }),
+        });
+      },
       setQty: (slug, qty) =>
         setItems((prev) =>
           qty <= 0

@@ -202,6 +202,18 @@ export async function sendLowStockAlertEmail(product: { name: string; slug: stri
   await sendViaResend(to, `Low stock: ${product.name} (${product.stock} left) — Hiplastics Malaysia`, html);
 }
 
+/** Alert staff when a gateway confirms payment for an order already cancelled. */
+export async function sendCancelledPaymentAlert(order: { order_no: string; total: number; currency: string; transaction_id?: string }) {
+  const to = process.env.ADMIN_ALERT_EMAIL || "sales@hiplastics.my";
+  const html = wrap(`
+    <h2 style="margin:0 0 12px;color:#b42318;">Payment received after cancellation</h2>
+    <p>Order <strong>${escapeHtml(order.order_no)}</strong> is cancelled but ToyyibPay reports a successful payment.</p>
+    <p>Expected total: <strong>${money(order.total, order.currency)}</strong><br>Transaction: <strong>${escapeHtml(order.transaction_id || "—")}</strong></p>
+    <p>Please reconcile this payment manually before fulfilling or refunding the order.</p>
+  `);
+  await sendViaResend(to, `Action required: paid cancelled order ${order.order_no} — Hiplastics Malaysia`, html);
+}
+
 /**
  * Back-in-stock notification, sent to every customer who asked to be
  * notified for a product (see stock_notify_requests table / requestStockNotify

@@ -6,6 +6,7 @@ const BASE_URL = "https://hiplastics.my";
 
 interface SitemapEntry {
   path: string;
+  lastmod?: string;
   changefreq?: "weekly" | "monthly" | "yearly";
   priority?: string;
 }
@@ -31,11 +32,13 @@ export const Route = createFileRoute("/sitemap.xml")({
           const data = await fetchAllPublicData();
           for (const p of data.products ?? []) {
             if (p.is_active === false) continue;
-            entries.push({ path: `/products/${p.slug}`, changefreq: "weekly", priority: "0.8" });
+            const productMeta = p as typeof p & { updated_at?: string; created_at?: string };
+            entries.push({ path: `/products/${p.slug}`, lastmod: productMeta.updated_at || productMeta.created_at, changefreq: "weekly", priority: "0.8" });
           }
           for (const n of data.news ?? []) {
             if (n.is_active === false) continue;
-            entries.push({ path: `/news/${n.slug}`, changefreq: "monthly", priority: "0.5" });
+            const newsMeta = n as typeof n & { created_at?: string };
+            entries.push({ path: `/news/${n.slug}`, lastmod: newsMeta.published_at || newsMeta.created_at, changefreq: "monthly", priority: "0.5" });
           }
         } catch {
           // If the DB is briefly unreachable, still serve the static pages above
@@ -46,6 +49,7 @@ export const Route = createFileRoute("/sitemap.xml")({
           [
             `  <url>`,
             `    <loc>${BASE_URL}${e.path}</loc>`,
+            e.lastmod ? `    <lastmod>${new Date(e.lastmod).toISOString()}</lastmod>` : null,
             e.changefreq ? `    <changefreq>${e.changefreq}</changefreq>` : null,
             e.priority ? `    <priority>${e.priority}</priority>` : null,
             `  </url>`,

@@ -16,14 +16,14 @@ export const Route = createFileRoute("/api/public/cart-reminder-cron")({
     handlers: {
       GET: async ({ request }) => {
         const secret = process.env.CRON_SECRET;
-        if (secret) {
-          const auth = request.headers.get("authorization") || "";
-          if (auth !== `Bearer ${secret}`) return new Response("unauthorized", { status: 401 });
-        }
+        const auth = request.headers.get("authorization") || "";
+        if (!secret || auth !== `Bearer ${secret}`) return new Response("unauthorized", { status: 401 });
 
         const { getAdminClient } = await import("@/integrations/hiplastics/admin.server");
         const { sendCartReminderEmail } = await import("@/lib/email.server");
         const admin = getAdminClient();
+        const { expireUnpaidOrders } = await import("@/lib/shop.server");
+        const expired = await expireUnpaidOrders(admin);
 
         const now = Date.now();
         const twoHoursAgo = new Date(now - 2 * 60 * 60 * 1000).toISOString();
@@ -50,7 +50,7 @@ export const Route = createFileRoute("/api/public/cart-reminder-cron")({
           sent++;
         }
 
-        return new Response(JSON.stringify({ ok: true, sent }), { headers: { "content-type": "application/json" } });
+        return new Response(JSON.stringify({ ok: true, sent, expired }), { headers: { "content-type": "application/json" } });
       },
     },
   },

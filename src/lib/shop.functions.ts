@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { enforceRateLimit } from "./rate-limit";
 
 export type OrderRow = {
   id: string;
@@ -84,17 +85,18 @@ export const placeOrder = createServerFn({ method: "POST" })
         items: z.array(lineSchema).min(1).max(50),
         customer_name: z.string().min(2).max(120),
         customer_email: z.string().email().max(160),
-        customer_phone: z.string().min(6).max(30),
+        customer_phone: z.string().regex(/^(?:\+?60|0)1[0-9\-\s]{7,12}$/, "Enter a valid Malaysian mobile number."),
         company: z.string().max(120).optional(),
         address1: z.string().min(3).max(200),
         address2: z.string().max(200).optional(),
         city: z.string().min(2).max(80),
         state: z.string().min(2).max(60),
-        postcode: z.string().min(4).max(10),
+        postcode: z.string().regex(/^\d{5}$/, "Enter a valid 5-digit Malaysian postcode."),
         notes: z.string().max(600).optional(),
         payment_method: z.enum(["cod", "toyyibpay"]),
         access_token: z.string().min(10, "You must be signed in to place an order."),
         coupon_code: z.string().max(40).optional(),
+        terms_accepted: z.literal(true),
       })
       .parse(d),
   )
@@ -113,6 +115,7 @@ export const checkCoupon = createServerFn({ method: "POST" })
     z.object({ code: z.string().min(1).max(40), subtotal: z.number().min(0) }).parse(d),
   )
   .handler(async ({ data }) => {
+    enforceRateLimit(`coupon:${data.code.trim().toUpperCase()}`, 20, 60_000);
     const { getAdminClient } = await import("@/integrations/hiplastics/admin.server");
     const admin = getAdminClient();
     const { data: row, error } = await admin.rpc("check_coupon", { p_code: data.code, p_subtotal: data.subtotal });
@@ -147,6 +150,7 @@ export const getOrder = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }) => {
+    enforceRateLimit(`order-lookup:${data.orderNo}:${data.email?.toLowerCase() || data.token || "anonymous"}`, 10, 60_000);
     const { loadOrder } = await import("./shop.server");
     try {
       const r = await loadOrder(data.orderNo, { token: data.token, email: data.email });
@@ -171,6 +175,7 @@ export const requestStockNotify = createServerFn({ method: "POST" })
     z.object({ slug: z.string().min(1).max(200), email: z.string().email().max(160) }).parse(d),
   )
   .handler(async ({ data }) => {
+    enforceRateLimit(`stock-notify:${data.email.toLowerCase()}`, 5, 60 * 60_000);
     const { getAdminClient } = await import("@/integrations/hiplastics/admin.server");
     const admin = getAdminClient();
     try {

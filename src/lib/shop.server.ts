@@ -4,7 +4,7 @@
  */
 import { getAdminClient } from "@/integrations/hiplastics/admin.server";
 import { randomBytes } from "node:crypto";
-import { sendOrderConfirmationEmail, sendOrderStatusEmail, sendLowStockAlertEmail } from "./email.server";
+import { sendOrderConfirmationEmail, sendOrderStatusEmail, sendLowStockAlertEmail, sendCancelledPaymentAlert } from "./email.server";
 import { normalizeMyPhone, tierPriceFor, type PriceTier } from "./site";
 
 /** Stock at or below this triggers a low-stock alert email to the admin. */
@@ -149,6 +149,7 @@ export type CheckoutInput = {
   /** Logged-in customer's Supabase access token. Required — no guest checkout. */
   access_token: string;
   coupon_code?: string;
+  terms_accepted: boolean;
 };
 
 /**
@@ -261,6 +262,7 @@ export async function getCartStockInfo(lines: { slug: string; qty: number }[]) {
 
 export async function createOrder(input: CheckoutInput) {
   if (!input.items.length) throw new Error("Your cart is empty.");
+  if (!input.terms_accepted) throw new Error("Please accept the Terms of Service and Refund & Return Policy.");
   const admin = getAdminClient();
 
   // No guest checkout — every order must belong to a signed-in customer.
@@ -355,7 +357,7 @@ export async function createOrder(input: CheckoutInput) {
     /* best-effort cleanup — never block order placement on this */
   }
 
-  const trackUrl = `/order/${order.order_no}?t=${order.access_token}`;
+  const trackUrl = `/order/${order.order_no}`;
 
   if (input.payment_method === "cod") {
     sendOrderConfirmationEmail(
@@ -423,7 +425,7 @@ async function createToyyibBill(a: {
     billPriceSetting: "1",
     billPayorInfo: "1",
     billAmount: String(Math.round(a.total * 100)),
-    billReturnUrl: `${base}/order/${a.orderNo}?t=${a.token}`,
+    billReturnUrl: `${base}/order/${a.orderNo}`,
     billCallbackUrl: `${base}/api/public/toyyibpay-callback`,
     billExternalReferenceNo: a.orderNo,
     billTo: a.name,
@@ -479,6 +481,8 @@ export async function syncBillStatus(orderNo: string) {
   }
   const paid = Array.isArray(rows) && rows.find((r) => r.billpaymentStatus === "1");
   if (!paid) return order;
+  if (!paymentAmountMatches(paid.billpaymentAmount, Number(order.total))) return order;
+  const wasCancelled = order.status === "cancelled";
   const { data: updated } = await admin
     .from("orders")
     .update({
@@ -493,7 +497,7 @@ export async function syncBillStatus(orderNo: string) {
     .eq("confirmation_email_sent", false) // atomic guard: only the first flip sends the email
     .select()
     .maybeSingle();
-  await applyStockOnce(order.id as string).catch(() => undefined);
+  if (!wasCancelled) await applyStockOnce(order.id as string).catch(() => undefined);
   if (updated) {
     const { data: items } = await admin.from("order_items").select("name, qty, unit_price, line_total").eq("order_id", order.id);
     sendOrderConfirmationEmail(
@@ -501,6 +505,9 @@ export async function syncBillStatus(orderNo: string) {
       (items ?? []) as Parameters<typeof sendOrderConfirmationEmail>[1],
       "paid",
     ).catch(() => undefined);
+  }
+  if (updated && wasCancelled) {
+    sendCancelledPaymentAlert({ order_no: updated.order_no as string, total: Number(updated.total), currency: updated.currency as string, transaction_id: updated.transaction_id as string }).catch(() => undefined);
   }
   return updated ?? order;
 }
@@ -530,7 +537,7 @@ export async function applyCallback(p: {
   // Verify with ToyyibPay directly — never trust the posted status field.
   const cfg = toyyibConfig();
   if (!cfg.secret) return { ok: false };
-  let rows: Array<{ billpaymentStatus?: string; billpaymentInvoiceNo?: string }> = [];
+  let rows: Array<{ billpaymentStatus?: string; billpaymentInvoiceNo?: string; billpaymentAmount?: string }> = [];
   try {
     const res = await fetch(`${cfg.host}/index.php/api/getBillTransactions`, {
       method: "POST",
@@ -546,6 +553,8 @@ export async function applyCallback(p: {
     // Not paid according to the gateway — never downgrade an already-paid order.
     return { ok: true, paid: false };
   }
+  if (!paymentAmountMatches(verifiedPaid.billpaymentAmount, Number(order.total))) return { ok: false, reason: "amount_mismatch" };
+  const wasCancelled = order.status === "cancelled";
 
   const { data: updatedOrder } = await admin
     .from("orders")
@@ -568,9 +577,19 @@ export async function applyCallback(p: {
       (items ?? []) as Parameters<typeof sendOrderConfirmationEmail>[1],
       "paid",
     ).catch(() => undefined);
+    if (wasCancelled) {
+      sendCancelledPaymentAlert({ order_no: updatedOrder.order_no as string, total: Number(updatedOrder.total), currency: updatedOrder.currency as string, transaction_id: updatedOrder.transaction_id as string }).catch(() => undefined);
+    }
   }
-  await applyStockOnce(order.id as string).catch(() => undefined);
+  if (!wasCancelled) await applyStockOnce(order.id as string).catch(() => undefined);
   return { ok: true, paid: true };
+}
+
+
+function paymentAmountMatches(raw: string | undefined, expected: number) {
+  const amount = Number(raw);
+  if (!Number.isFinite(amount) || !Number.isFinite(expected)) return false;
+  return Math.abs(amount - expected) < 0.01 || Math.abs(amount / 100 - expected) < 0.01;
 }
 
 
@@ -602,6 +621,39 @@ export async function listOrders() {
     ? await admin.from("order_items").select("*").in("order_id", ids)
     : { data: [] as unknown[] };
   return { orders: orders ?? [], items: (items ?? []) as Record<string, unknown>[] };
+}
+
+/** Cancel stale unpaid online orders and release their reservation exactly once. */
+export async function expireUnpaidOrders(admin: ReturnType<typeof getAdminClient>) {
+  const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: candidates, error } = await admin
+    .from("orders")
+    .select("id, order_no, coupon_code")
+    .eq("payment_method", "toyyibpay")
+    .eq("payment_status", "pending")
+    .eq("status", "new")
+    .eq("stock_applied", true)
+    .lte("created_at", cutoff)
+    .limit(200);
+  if (error) throw new Error(error.message);
+  let expired = 0;
+  for (const candidate of candidates ?? []) {
+    const { data: claimed } = await admin
+      .from("orders")
+      .update({ status: "cancelled", payment_status: "failed", stock_applied: false, updated_at: new Date().toISOString() })
+      .eq("id", candidate.id)
+      .eq("payment_status", "pending")
+      .eq("status", "new")
+      .eq("stock_applied", true)
+      .select("id")
+      .maybeSingle();
+    if (!claimed) continue;
+    const { data: items } = await admin.from("order_items").select("slug, qty").eq("order_id", candidate.id);
+    for (const item of items ?? []) await safeRpc(admin, "restore_stock", { p_slug: item.slug, p_qty: item.qty });
+    await releaseCouponIfAny(admin, candidate.coupon_code as string | undefined);
+    expired++;
+  }
+  return expired;
 }
 
 /** A logged-in customer's own order history — never another customer's. */

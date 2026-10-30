@@ -13,6 +13,7 @@ import { site } from "@/lib/site";
 import codLogo from "@/assets/payment-cod.png";
 import duitnowLogo from "@/assets/payment-duitnow.png";
 import fpxLogo from "@/assets/payment-fpx.jpg";
+import { trackBeginCheckout, trackPurchase } from "@/lib/analytics";
 
 export const Route = createFileRoute("/cart")({
   head: () => ({
@@ -65,6 +66,7 @@ function CartPage() {
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [couponMsg, setCouponMsg] = useState<{ type: "ok" | "error"; text: string } | null>(null);
   const [couponBusy, setCouponBusy] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   const lines = items.map((i) => ({ slug: i.slug, qty: i.qty }));
   const linesKey = JSON.stringify(lines);
@@ -180,9 +182,14 @@ function CartPage() {
       navigate({ to: "/login", search: { redirect: "/cart" } });
       return;
     }
+    if (!termsAccepted) {
+      setErr("Please accept the Terms of Service and Refund & Return Policy before placing your order.");
+      return;
+    }
     setBusy(true); setErr(null);
     try {
-      const res = await submit({ data: { ...form, items: lines, payment_method: method, access_token: session.access_token, coupon_code: appliedCoupon ?? undefined } });
+      trackBeginCheckout(q?.total ?? 0, lines.length);
+      const res = await submit({ data: { ...form, items: lines, payment_method: method, access_token: session.access_token, coupon_code: appliedCoupon ?? undefined, terms_accepted: true } });
       if (!res.ok) { setErr(res.error); setBusy(false); return; }
       clear();
       removeCoupon();
@@ -195,6 +202,7 @@ function CartPage() {
         window.location.href = res.paymentUrl;
         return;
       }
+      trackPurchase(res.order_no, q?.total ?? 0);
       navigate({ to: "/order/$orderNo", params: { orderNo: res.order_no }, search: { t: res.token } });
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Could not place order");
@@ -379,6 +387,10 @@ function CartPage() {
                   </p>
                 )}
                 {err && <p className="mt-4 rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive">{err}</p>}
+                <label className="mt-5 flex items-start gap-2 text-xs text-muted-foreground">
+                  <input type="checkbox" checked={termsAccepted} onChange={(e) => setTermsAccepted(e.target.checked)} className="mt-0.5" />
+                  <span>I agree to the <Link to="/terms-of-service" className="font-semibold text-primary underline">Terms of Service</Link> and <Link to="/refund-policy" className="font-semibold text-primary underline">Refund &amp; Return Policy</Link>.</span>
+                </label>
               </form>
             </div>
 

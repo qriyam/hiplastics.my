@@ -85,3 +85,22 @@ export function trackPageView(path: string) {
   const gtag = (window as unknown as { __hpGtag?: (...a: unknown[]) => void }).__hpGtag;
   if (gaId && gtag) gtag("event", "page_view", { page_path: path });
 }
+
+export function trackEvent(name: string, params: Record<string, unknown> = {}) {
+  if (typeof window === "undefined" || getStoredConsent() !== "granted") return;
+  const gtag = (window as unknown as { __hpGtag?: (...a: unknown[]) => void }).__hpGtag;
+  const pixel = (window as unknown as { fbq?: (...a: unknown[]) => void }).fbq;
+  if (gtag) gtag("event", name, params);
+  if (pixel) pixel("track", name, params);
+}
+
+export const trackAddToCart = (item: { id: string; name: string; price?: number; quantity: number }) =>
+  trackEvent("add_to_cart", { currency: "MYR", value: Number(item.price || 0) * item.quantity, items: [item] });
+
+export const trackBeginCheckout = (value: number, itemCount: number) =>
+  trackEvent("begin_checkout", { currency: "MYR", value, item_count: itemCount });
+
+export const trackPurchase = (orderNo: string, value: number) =>
+  trackEvent("purchase", { transaction_id: orderNo, currency: "MYR", value });
+
+export const trackWhatsAppClick = (location: string) => trackEvent("whatsapp_click", { location });
