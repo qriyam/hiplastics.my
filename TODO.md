@@ -31,3 +31,12 @@
 - [ ] Expired orders expose a safe “Pay again” path; free-shipping progress and coupon guardrails are visible.
 - [ ] Product catalogue supports category/filter/sort/pagination and datasheet/compare foundations.
 - [ ] Account and admin foundations exist for saved addresses, sync, search/export, packing slips, low-stock and activity visibility.
+
+
+## Visitor and account-lead analytics
+
+- [ ] The admin sidebar includes a **Visitors & Leads** option under Sales.
+- [ ] The panel shows Malaysia-time today’s unique visitors, page views, signed-in visitors, and popular paths.
+- [ ] The panel lists registered Supabase Auth accounts that have no matching order by user ID or email, including name, email, registration date, and last sign-in date.
+- [ ] Visitor tracking stores one anonymous daily aggregate per browser ID and never exposes raw visitor data publicly.
+- [ ] The additive Supabase analytics migration is applied to the connected project and the admin panel reports live values after refresh.

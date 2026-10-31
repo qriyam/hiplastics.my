@@ -6,8 +6,10 @@ import {
   useRouter,
   HeadContent,
   Scripts,
+  useLocation,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
+import { useServerFn } from "@tanstack/react-start";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -21,6 +23,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { CookieConsent } from "@/components/CookieConsent";
 import { WishlistProvider } from "@/lib/wishlist";
 import { CartSnapshotSync } from "@/lib/cart-snapshot-sync";
+import { useAuth } from "@/lib/auth";
+import { recordVisit } from "@/lib/analytics.functions";
 
 function NotFoundComponent() {
   return (
@@ -160,6 +164,7 @@ function RootComponent() {
       <LanguageProvider>
         <LanguageHtmlSync />
         <AuthProvider>
+          <VisitTracker />
           <CartProvider>
             <WishlistProvider>
               <ConfirmProvider>
@@ -182,5 +187,27 @@ function LanguageHtmlSync() {
   useEffect(() => {
     document.documentElement.lang = lang === "ms" ? "ms" : "en";
   }, [lang]);
+  return null;
+}
+
+function VisitTracker() {
+  const location = useLocation();
+  const { session } = useAuth();
+  const saveVisit = useServerFn(recordVisit);
+
+  useEffect(() => {
+    try {
+      const key = "hp-visitor-id";
+      let visitorId = window.localStorage.getItem(key);
+      if (!visitorId) {
+        visitorId = `${crypto.randomUUID()}-${Math.random().toString(36).slice(2, 8)}`;
+        window.localStorage.setItem(key, visitorId);
+      }
+      void saveVisit({ data: { visitor_id: visitorId, path: location.pathname, access_token: session?.access_token } }).catch(() => undefined);
+    } catch {
+      // Analytics must never block navigation when storage is unavailable.
+    }
+  }, [location.pathname, saveVisit, session?.access_token]);
+
   return null;
 }

@@ -52,3 +52,10 @@ Three candidate styles: **Industrial blue utility** (0.06); **Warm Malaysian pro
 - `src/lib/site.ts`, `src/lib/i18n.tsx`, route heads and `sitemap.xml`: canonical contact, language and SEO behavior.
 - `supabase-setup.sql`: additive/idempotent schema and RLS migrations.
 - `vercel.json`, `public/robots.txt`, `public/manus-routes.json`: deployment, security and route metadata.
+
+
+## Visitor and account-lead analytics addition
+
+The admin console gains a **Visitors & Leads** tab under Sales. The public app records a random browser visitor ID once per route visit through a server function; the database stores only one aggregate row per visitor per Malaysia calendar day, with page count, last path, timestamps, and a verified auth user ID when available. Anonymous raw browsing identities are not exposed to the browser or third parties.
+
+The admin-only server function validates the admin session, counts today’s unique visitors/page views/signed-in visitors, aggregates popular paths, and lists Supabase Auth users who do not match any order by user ID or normalized email. The UI shows account name, email, signup date, and last sign-in date. The analytics table and RPC are additive and idempotent in `supabase-setup.sql`; the site continues to work if the migration has not yet been run, while the admin displays a migration-needed message.

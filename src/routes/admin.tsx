@@ -6,7 +6,7 @@ import {
   LogOut, Plus, Save, Trash2, Loader2, LayoutDashboard, Package, ShoppingBag, Tags,
   Factory, Images, FileDown, Newspaper, Settings as SettingsIcon, ServerCog, Menu,
   Search, Truck, CheckCircle2, RefreshCw, Download, X, Ticket, Star, Printer,
-  PackageCheck, XCircle, PackagePlus, ClipboardCheck, Users, Mail, Phone as PhoneIcon,
+  PackageCheck, XCircle, PackagePlus, ClipboardCheck, Users, Mail, Phone as PhoneIcon, BarChart3,
 } from "lucide-react";
 import { adminListOrders, adminUpdateOrder, type OrderRow, type OrderItemRow } from "@/lib/shop.functions";
 import { money } from "@/lib/cart";
@@ -26,6 +26,7 @@ import {
   bulkUpsertProducts,
 } from "@/lib/cms.functions";
 import { parseCsv, toCsv, downloadCsv } from "@/lib/csv";
+import { getAdminAnalytics, type AdminAnalytics } from "@/lib/analytics.functions";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -59,6 +60,7 @@ const NAV = [
   { key: "orders", label: "Orders", icon: ShoppingBag, group: "Sales" },
   { key: "deliveries", label: "Deliveries", icon: Truck, group: "Sales" },
   { key: "customers", label: "Customers", icon: Users, group: "Sales" },
+  { key: "analytics", label: "Visitors & Leads", icon: BarChart3, group: "Sales" },
   { key: "products", label: "Products", icon: Package, group: "Catalogue" },
   { key: "categories", label: "Categories", icon: Tags, group: "Catalogue" },
   { key: "industries", label: "Industries", icon: Factory, group: "Catalogue" },
@@ -415,6 +417,7 @@ function Dashboard({ session, onSignOut }: { session: Session; onSignOut: () => 
   const saveSettings = useServerFn(updateSettings);
   const upload = useServerFn(uploadMedia);
   const listOrdersFn = useServerFn(adminListOrders);
+  const loadAnalytics = useServerFn(getAdminAnalytics);
   const confirmDialog = useConfirm();
   const [tab, setTab] = useState<TabKey>("dashboard");
   const [navOpen, setNavOpen] = useState(false);
@@ -424,6 +427,7 @@ function Dashboard({ session, onSignOut }: { session: Session; onSignOut: () => 
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [importBusy, setImportBusy] = useState(false);
+  const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
 
   useEffect(() => {
     if (!navOpen) return;
@@ -435,13 +439,15 @@ function Dashboard({ session, onSignOut }: { session: Session; onSignOut: () => 
   async function refresh() {
     setBusy(true); setErr(null);
     try {
-      const [cms, ord] = await Promise.all([
+      const [cms, ord, stats] = await Promise.all([
         load({ data: { token: session.token } }),
         listOrdersFn({ data: { token: session.token } }).catch(() => ({ orders: [], items: [] })),
+        loadAnalytics({ data: { token: session.token } }).catch(() => null),
       ]);
       setData(cms);
       setOrders(ord.orders as OrderRow[]);
       setOrderItems(ord.items as OrderItemRow[]);
+      if (stats) setAnalytics(stats);
     } catch (e) { setErr(e instanceof Error ? e.message : "Load failed"); }
     setBusy(false);
   }
@@ -557,6 +563,8 @@ function Dashboard({ session, onSignOut }: { session: Session; onSignOut: () => 
           )}
 
           {tab === "customers" && <CustomersPanel orders={orders} />}
+
+          {tab === "analytics" && <AnalyticsPanel data={analytics} />}
 
           {data && (["products", "categories", "industries", "gallery", "downloads", "news", "coupons", "reviews"] as CrudKey[]).includes(tab as CrudKey) && (
             <CrudTable
@@ -703,6 +711,67 @@ function Overview({ orders, products, onGoto }: { orders: OrderRow[]; products: 
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function AnalyticsPanel({ data }: { data: AdminAnalytics | null }) {
+  if (!data) {
+    return <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">Analytics data is not available yet. Run the analytics SQL migration, then refresh.</div>;
+  }
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-bold text-foreground">Visitors &amp; account leads</h2>
+        <p className="mt-1 text-xs text-muted-foreground">Today is calculated using Malaysia time. Anonymous visitors are counted by a privacy-safe daily browser ID.</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatCard label="Unique visitors today" value={String(data.today.uniqueVisitors)} hint="one browser per day" />
+        <StatCard label="Page views today" value={String(data.today.pageViews)} hint="recorded route visits" />
+        <StatCard label="Signed-in visitors" value={String(data.today.signedInVisitors)} hint="visitor had an account session" />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+        <div className="rounded-lg border border-border bg-card">
+          <div className="border-b border-border px-4 py-3 text-sm font-bold text-foreground">Popular pages today</div>
+          <div className="divide-y divide-border">
+            {data.today.topPaths.length === 0 && <p className="p-5 text-sm text-muted-foreground">No visits recorded yet.</p>}
+            {data.today.topPaths.map((row) => (
+              <div key={row.path} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                <span className="min-w-0 truncate font-medium text-foreground">{row.path}</span>
+                <span className="shrink-0 text-xs font-semibold text-muted-foreground">{row.views} view{row.views === 1 ? "" : "s"}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+            <div>
+              <div className="text-sm font-bold text-foreground">Accounts with no orders</div>
+              <div className="text-[11px] text-muted-foreground">Registered accounts that do not yet appear in order history</div>
+            </div>
+            <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-bold text-primary">{data.accountOnly.length}</span>
+          </div>
+          <div className="max-h-[28rem] overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 border-b border-border bg-surface text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                <tr><th className="px-4 py-2">Account</th><th className="px-4 py-2">Registered</th><th className="px-4 py-2">Last sign-in</th></tr>
+              </thead>
+              <tbody>
+                {data.accountOnly.map((account) => (
+                  <tr key={account.id} className="border-b border-border last:border-0">
+                    <td className="px-4 py-3"><div className="font-semibold text-foreground">{account.name}</div><div className="text-xs text-muted-foreground">{account.email}</div></td>
+                    <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">{new Date(account.created_at).toLocaleDateString()}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">{account.last_sign_in_at ? new Date(account.last_sign_in_at).toLocaleDateString() : "Never"}</td>
+                  </tr>
+                ))}
+                {data.accountOnly.length === 0 && <tr><td colSpan={3} className="px-4 py-8 text-center text-sm text-muted-foreground">Everyone in the current account list has an order.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
