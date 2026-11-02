@@ -3,7 +3,7 @@
  * Never imported from client code — only from server function handlers.
  */
 import { getAdminClient } from "@/integrations/hiplastics/admin.server";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { sendOrderConfirmationEmail, sendOrderStatusEmail, sendLowStockAlertEmail, sendCancelledPaymentAlert } from "./email.server";
 import { normalizeMyPhone, tierPriceFor, type PriceTier } from "./site";
 
@@ -473,13 +473,13 @@ export async function syncBillStatus(orderNo: string) {
     body: new URLSearchParams({ billCode: order.bill_code, billpaymentStatus: "1" }),
   });
   const text = await res.text();
-  let rows: Array<{ billpaymentStatus?: string; billpaymentInvoiceNo?: string; billpaymentAmount?: string }> = [];
+  let rows: Array<{ billpaymentStatus?: string | number; billpaymentInvoiceNo?: string; billpaymentAmount?: string | number; transaction_id?: string }> = [];
   try {
     rows = JSON.parse(text);
   } catch {
     return order;
   }
-  const paid = Array.isArray(rows) && rows.find((r) => r.billpaymentStatus === "1");
+  const paid = Array.isArray(rows) && rows.find((r) => String(r.billpaymentStatus) === "1");
   if (!paid) return order;
   if (!paymentAmountMatches(paid.billpaymentAmount, Number(order.total))) return order;
   const wasCancelled = order.status === "cancelled";
@@ -494,7 +494,7 @@ export async function syncBillStatus(orderNo: string) {
       confirmation_email_sent: true,
     })
     .eq("id", order.id)
-    .eq("confirmation_email_sent", false) // atomic guard: only the first flip sends the email
+    .eq("payment_status", "pending") // idempotent payment transition; do not block on email history
     .select()
     .maybeSingle();
   if (!wasCancelled) await applyStockOnce(order.id as string).catch(() => undefined);
@@ -523,6 +523,8 @@ export async function applyCallback(p: {
   billcode: string;
   order_id: string;
   transaction_id?: string;
+  amount?: string;
+  hash?: string;
 }) {
   const admin = getAdminClient();
   const { data: order } = await admin
@@ -534,25 +536,33 @@ export async function applyCallback(p: {
   if (order.bill_code && p.billcode && order.bill_code !== p.billcode) return { ok: false };
   if (order.payment_method !== "toyyibpay" || !order.bill_code) return { ok: false };
 
-  // Verify with ToyyibPay directly — never trust the posted status field.
+  // ToyyibPay signs callback payloads. Accept a successful callback immediately
+  // after validating the signature and amount; use the transaction API as a
+  // fallback when the callback omits the amount or transaction reference.
   const cfg = toyyibConfig();
-  if (!cfg.secret) return { ok: false };
-  let rows: Array<{ billpaymentStatus?: string; billpaymentInvoiceNo?: string; billpaymentAmount?: string }> = [];
-  try {
-    const res = await fetch(`${cfg.host}/index.php/api/getBillTransactions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ billCode: order.bill_code, billpaymentStatus: "1" }),
-    });
-    rows = JSON.parse(await res.text());
-  } catch {
-    return { ok: false };
+  if (!cfg.secret || !p.hash) return { ok: false, reason: "invalid_callback_hash" };
+  const expectedHash = createHash("md5").update(`${cfg.secret}${p.status}${p.order_id}${p.refno}ok`).digest("hex");
+  if (expectedHash.toLowerCase() !== p.hash.toLowerCase()) return { ok: false, reason: "invalid_callback_hash" };
+  if (String(p.status) !== "1") return { ok: true, paid: false };
+
+  let verifiedPaid: { billpaymentInvoiceNo?: string; billpaymentAmount?: string | number } | undefined;
+  if (p.amount && paymentAmountMatches(p.amount, Number(order.total))) {
+    verifiedPaid = { billpaymentInvoiceNo: p.transaction_id || p.refno, billpaymentAmount: p.amount };
+  } else {
+    let rows: Array<{ billpaymentStatus?: string | number; billpaymentInvoiceNo?: string; billpaymentAmount?: string | number }> = [];
+    try {
+      const res = await fetch(`${cfg.host}/index.php/api/getBillTransactions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ billCode: order.bill_code, billpaymentStatus: "1" }),
+      });
+      rows = JSON.parse(await res.text());
+    } catch {
+      return { ok: false, reason: "gateway_verification_failed" };
+    }
+    verifiedPaid = Array.isArray(rows) && rows.find((r) => String(r.billpaymentStatus) === "1");
   }
-  const verifiedPaid = Array.isArray(rows) && rows.find((r) => r.billpaymentStatus === "1");
-  if (!verifiedPaid) {
-    // Not paid according to the gateway — never downgrade an already-paid order.
-    return { ok: true, paid: false };
-  }
+  if (!verifiedPaid) return { ok: true, paid: false };
   if (!paymentAmountMatches(verifiedPaid.billpaymentAmount, Number(order.total))) return { ok: false, reason: "amount_mismatch" };
   const wasCancelled = order.status === "cancelled";
 
@@ -567,7 +577,7 @@ export async function applyCallback(p: {
       confirmation_email_sent: true,
     })
     .eq("id", order.id)
-    .eq("confirmation_email_sent", false) // atomic guard: only the first flip sends the email
+    .eq("payment_status", "pending") // idempotent payment transition; do not block on email history
     .select()
     .maybeSingle();
   if (updatedOrder) {
@@ -586,7 +596,7 @@ export async function applyCallback(p: {
 }
 
 
-function paymentAmountMatches(raw: string | undefined, expected: number) {
+function paymentAmountMatches(raw: string | number | undefined, expected: number) {
   const amount = Number(raw);
   if (!Number.isFinite(amount) || !Number.isFinite(expected)) return false;
   return Math.abs(amount - expected) < 0.01 || Math.abs(amount / 100 - expected) < 0.01;

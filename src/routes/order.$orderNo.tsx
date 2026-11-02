@@ -2,7 +2,7 @@ import { RouteError } from "@/components/RouteError";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { CheckCircle2, Clock, XCircle, Download, Loader2, ShieldCheck, Star, ClipboardList, Truck, PackageCheck } from "lucide-react";
+import { CheckCircle2, Clock, XCircle, Download, Loader2, ShieldCheck, Star, ClipboardList, Truck, PackageCheck, Package } from "lucide-react";
 import { SiteLayout } from "@/components/SiteLayout";
 import { getOrder, type OrderRow, type OrderItemRow } from "@/lib/shop.functions";
 import { money } from "@/lib/cart";
@@ -56,6 +56,20 @@ function OrderPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t, emailFromSearch, orderNo]);
 
+  useEffect(() => {
+    if (!order || order.payment_method !== "toyyibpay" || order.payment_status !== "pending") return;
+    let cancelled = false;
+    let attempts = 0;
+    const timer = window.setInterval(async () => {
+      if (cancelled || attempts >= 6) return;
+      attempts += 1;
+      const res = await fetchOrder({ data: { orderNo, token: t, email: emailFromSearch } });
+      if (!cancelled && res.ok) { setOrder(res.order); setItems(res.items); }
+      if (res.ok && res.order.payment_status !== "pending") window.clearInterval(timer);
+    }, 3000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [order, orderNo, t, emailFromSearch, fetchOrder]);
+
   if (!order) {
     return (
       <SiteLayout>
@@ -84,7 +98,8 @@ function OrderPage() {
   const stampLabel = isCancelled ? (order.status === "cancelled" ? "Cancelled" : "Refunded") : paid ? "Paid" : null;
 
   const deliverySteps = [
-    { key: "processing", label: "Order confirmed & packing" },
+    { key: "new", label: "Order received" },
+    { key: "processing", label: "Packing" },
     { key: "shipped", label: "Shipped" },
     { key: "delivered", label: "Delivered" },
   ] as const;
@@ -100,7 +115,8 @@ function OrderPage() {
   // reference stored in the steps array; render them explicitly instead so
   // there's no chance of the reference resolving to nothing in production.
   function StepIcon({ stepKey, className }: { stepKey: (typeof deliverySteps)[number]["key"]; className?: string }) {
-    if (stepKey === "processing") return <ClipboardList className={className} />;
+    if (stepKey === "new") return <ClipboardList className={className} />;
+    if (stepKey === "processing") return <Package className={className} />;
     if (stepKey === "shipped") return <Truck className={className} />;
     return <PackageCheck className={className} />;
   }
@@ -190,9 +206,12 @@ function OrderPage() {
               {paid ? "Payment Successful — Order Confirmed" : cod ? "Order Confirmed — Cash on Delivery" : `Payment ${order.payment_status}`}
             </div>
 
-            {/* Delivery timeline */}
-            {(order.courier || order.tracking_number || ["processing", "shipped", "delivered", "completed"].includes(order.status)) && (
-              <div className="mx-6 mt-4 rounded-lg border border-border p-4">
+            {/* Delivery timeline — always present so the first invoice clearly shows the current order state. */}
+            <div className="mx-6 mt-4 rounded-lg border border-border bg-surface/40 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="text-xs font-bold uppercase tracking-wide text-[var(--invoice-accent,var(--color-primary))]">Order tracking update</div>
+                  <div className="rounded-full bg-secondary px-2.5 py-1 text-[11px] font-bold uppercase text-foreground">{order.status}</div>
+                </div>
                 <div className="flex items-center justify-between text-xs">
                   {deliverySteps.map((step, idx) => {
                     const done = rankOf(order.status) >= rankOf(step.key) || order.status === "completed";
@@ -237,7 +256,6 @@ function OrderPage() {
                 )}
                 {order.delivery_note && <p className="mt-1 text-xs text-muted-foreground">{order.delivery_note}</p>}
               </div>
-            )}
 
             <div className="p-6">
               <div className="grid gap-4 border-b border-border pb-4 text-sm sm:grid-cols-2">

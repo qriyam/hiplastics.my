@@ -13,10 +13,13 @@ export const Route = createFileRoute("/api/public/toyyibpay-callback")({
           billcode: params.get("billcode") ?? "",
           order_id: params.get("order_id") ?? "",
           transaction_id: params.get("transaction_id") ?? "",
+          amount: params.get("amount") ?? "",
+          hash: params.get("hash") ?? "",
         };
         if (!payload.order_id || !payload.billcode) return new Response("bad request", { status: 400 });
         try {
-          await applyCallback(payload);
+          const result = await applyCallback(payload);
+          if (!result.ok) return new Response(result.reason || "invalid callback", { status: 400 });
         } catch {
           return new Response("error", { status: 500 });
         }
