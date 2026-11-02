@@ -678,8 +678,14 @@ export async function listMyOrders(accessToken: string) {
     .order("created_at", { ascending: false })
     .limit(200);
   if (error) throw new Error(error.message);
+  const currentOrders = await Promise.all(
+    (orders ?? []).map(async (order) => {
+      if (order.payment_method !== "toyyibpay" || order.payment_status !== "pending") return order;
+      return (await syncBillStatus(order.order_no).catch(() => order)) ?? order;
+    }),
+  );
   // Same reasoning as loadOrder(): admin_note is internal-only.
-  return { orders: (orders ?? []).map(({ admin_note: _n, ...o }) => o) };
+  return { orders: currentOrders.map(({ admin_note: _n, ...o }) => o) };
 }
 
 export type OrderPatch = {

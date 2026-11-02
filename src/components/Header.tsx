@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useRef } from "react";
-import { Menu, X, Search, User, Heart, PackageSearch } from "lucide-react";
+import { Menu, X, Search, User, Heart, PackageSearch, ClipboardList } from "lucide-react";
 import { Logo } from "./Logo";
 import { CartButton } from "./CartDrawer";
 import { usePublicData } from "@/hooks/usePublicData";
@@ -228,6 +228,15 @@ export function Header() {
               <span className="text-lg font-semibold text-primary">{t("language")}</span>
               <LanguageSwitcher />
             </div>
+            {user && (
+              <Link
+                to="/account"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2 border-t border-border/50 py-5 text-2xl font-semibold text-primary transition-all duration-200 hover:bg-secondary/70 hover:pl-2 hover:text-primary/80 focus-visible:bg-secondary/70 focus-visible:outline-none"
+              >
+                <ClipboardList className="h-6 w-6" /> My Orders
+              </Link>
+            )}
             <Link
               to={user ? "/account" : "/login"}
               onClick={() => setOpen(false)}

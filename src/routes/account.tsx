@@ -57,12 +57,26 @@ function AccountPage() {
 
   useEffect(() => {
     if (!session?.access_token) return;
-    fetchMyOrders({ data: { access_token: session.access_token } }).then((r) => {
+    let active = true;
+    const loadOrders = async () => {
+      const r = await fetchMyOrders({ data: { access_token: session.access_token } });
+      if (!active) return;
       if (r.ok) setOrders(r.orders);
       else setErr(r.error);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.access_token]);
+    };
+    const onFocus = () => { void loadOrders(); };
+    const onVisibility = () => { if (document.visibilityState === "visible") void loadOrders(); };
+    void loadOrders();
+    const timer = window.setInterval(loadOrders, 30_000);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [session?.access_token, fetchMyOrders]);
 
   if (loading || !user) {
     return (
