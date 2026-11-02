@@ -201,18 +201,23 @@ function OrderPage() {
             )}
 
             {/* Status banner */}
-            <div className={`mx-6 flex items-center gap-2 rounded-lg border p-3 text-sm font-semibold ${paid || cod ? "border-[var(--invoice-accent,var(--color-primary))]/30 bg-[var(--invoice-accent,var(--color-primary))]/5 text-[var(--invoice-accent,var(--color-primary))]" : "border-border bg-secondary text-muted-foreground"}`}>
-              {paid || cod ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <Clock className="h-4 w-4 shrink-0" />}
-              {paid ? "Payment Successful — Order Confirmed" : cod ? "Order Confirmed — Cash on Delivery" : `Payment ${order.payment_status}`}
+            <div className={`mx-6 flex items-center gap-2 rounded-lg border p-3 text-sm font-semibold ${isCancelled ? "border-destructive/30 bg-destructive/5 text-destructive" : paid || cod ? "border-[var(--invoice-accent,var(--color-primary))]/30 bg-[var(--invoice-accent,var(--color-primary))]/5 text-[var(--invoice-accent,var(--color-primary))]" : "border-border bg-secondary text-muted-foreground"}`}>
+              {isCancelled ? <XCircle className="h-4 w-4 shrink-0" /> : paid || cod ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <Clock className="h-4 w-4 shrink-0" />}
+              {isCancelled ? (order.payment_status === "refunded" ? "Order Refunded" : "Order Cancelled") : paid ? "Payment Successful — Order Confirmed" : cod ? "Order Confirmed — Cash on Delivery" : `Payment ${order.payment_status}`}
             </div>
 
             {/* Delivery timeline — always present so the first invoice clearly shows the current order state. */}
-            <div className="mx-6 mt-4 rounded-lg border border-border bg-surface/40 p-4">
+            <div className={`mx-6 mt-4 rounded-lg border p-4 ${isCancelled ? "border-destructive/30 bg-destructive/5" : "border-border bg-surface/40"}`}>
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <div className="text-xs font-bold uppercase tracking-wide text-[var(--invoice-accent,var(--color-primary))]">Order tracking update</div>
-                  <div className="rounded-full bg-secondary px-2.5 py-1 text-[11px] font-bold uppercase text-foreground">{order.status}</div>
+                  <div className={`text-xs font-bold uppercase tracking-wide ${isCancelled ? "text-destructive" : "text-[var(--invoice-accent,var(--color-primary))]"}`}>{isCancelled ? "Order status update" : "Order tracking update"}</div>
+                  <div className={`rounded-full px-2.5 py-1 text-[11px] font-bold uppercase ${isCancelled ? "bg-destructive/10 text-destructive" : "bg-secondary text-foreground"}`}>{isCancelled ? (order.payment_status === "refunded" ? "Refunded" : "Cancelled") : order.status}</div>
                 </div>
-                <div className="flex items-center justify-between text-xs">
+                {isCancelled ? (
+                  <div className="flex items-center gap-2 rounded-md border border-destructive/20 bg-background/60 px-3 py-3 text-sm font-semibold text-destructive">
+                    <XCircle className="h-5 w-5 shrink-0" />
+                    <span>{order.payment_status === "refunded" ? "This order has been refunded and will not be delivered." : "This order was cancelled and will not be delivered."}</span>
+                  </div>
+                ) : <div className="flex items-center justify-between text-xs">
                   {deliverySteps.map((step, idx) => {
                     const done = rankOf(order.status) >= rankOf(step.key) || order.status === "completed";
                     const lineFilled = done && rankOf(order.status) > rankOf(step.key);
@@ -240,7 +245,7 @@ function OrderPage() {
                       </div>
                     );
                   })}
-                </div>
+                </div>}
                 {(order.courier || order.tracking_number) && (
                   <p className="mt-4 text-sm text-foreground">
                     {order.courier} {order.tracking_number && <>· Tracking <strong>{order.tracking_number}</strong></>}

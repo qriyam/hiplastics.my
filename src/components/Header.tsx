@@ -169,7 +169,7 @@ export function Header() {
 
       {open && (
         <div className="fixed inset-0 z-[60] flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-background overscroll-contain">
-          <div className="flex h-20 items-center justify-between border-b border-border px-4 sm:px-6">
+          <div className="z-10 flex h-20 shrink-0 items-center justify-between border-b border-border bg-background px-4 sm:px-6">
             <Link to="/" onClick={() => setOpen(false)} aria-label={settings.name}>
               <Logo />
             </Link>
@@ -209,7 +209,7 @@ export function Header() {
             <Link
               to="/track"
               onClick={() => setOpen(false)}
-              className="mb-3 flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3.5 text-lg font-bold text-primary-foreground shadow-sm"
+              className="mb-3 flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3.5 text-lg font-bold text-primary-foreground shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary active:scale-[0.98]"
             >
               <PackageSearch className="h-5 w-5" /> {t("nav_track")}
             </Link>
@@ -218,7 +218,7 @@ export function Header() {
                 <Link
                   to={item.to}
                   onClick={() => setOpen(false)}
-                  className="block py-5 text-2xl font-semibold text-primary"
+                  className="block rounded-md py-5 text-2xl font-semibold text-primary transition-all duration-200 hover:bg-secondary/70 hover:pl-2 hover:text-primary/80 focus-visible:bg-secondary/70 focus-visible:outline-none"
                 >
                   {t(item.key)}
                 </Link>
@@ -231,7 +231,7 @@ export function Header() {
             <Link
               to={user ? "/account" : "/login"}
               onClick={() => setOpen(false)}
-              className="flex items-center gap-2 border-t border-border/50 py-5 text-2xl font-semibold text-primary"
+              className="flex items-center gap-2 border-t border-border/50 py-5 text-2xl font-semibold text-primary transition-all duration-200 hover:bg-secondary/70 hover:pl-2 hover:text-primary/80 focus-visible:bg-secondary/70 focus-visible:outline-none"
             >
               <User className="h-6 w-6" /> {user ? t("nav_my_account") : t("nav_signin_register")}
             </Link>
