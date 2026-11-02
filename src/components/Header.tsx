@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useRef } from "react";
-import { Menu, X, Search, User, Heart } from "lucide-react";
+import { Menu, X, Search, User, Heart, PackageSearch } from "lucide-react";
 import { Logo } from "./Logo";
 import { CartButton } from "./CartDrawer";
 import { usePublicData } from "@/hooks/usePublicData";
@@ -15,7 +15,6 @@ const nav = [
   { to: "/industries", key: "nav_esl", label: "ESL Solutions" },
   { to: "/news", key: "nav_news", label: "News & Blog" },
   { to: "/contact", key: "nav_contact", label: "Contact" },
-  { to: "/track", key: "nav_track", label: "Track Order" },
 ] as const;
 
 /** Always-visible EN/BM switcher. Previously this was a static, non-clickable
@@ -58,8 +57,16 @@ export function Header() {
 
 
   useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
+    const previousOverflow = document.body.style.overflow;
+    const previousOverscroll = document.documentElement.style.overscrollBehavior;
+    if (open) {
+      document.body.style.overflow = "hidden";
+      document.documentElement.style.overscrollBehavior = "none";
+    }
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.documentElement.style.overscrollBehavior = previousOverscroll;
+    };
   }, [open]);
 
   useEffect(() => {
@@ -161,7 +168,7 @@ export function Header() {
       </header>
 
       {open && (
-        <div className="fixed inset-0 z-[60] bg-background">
+        <div className="fixed inset-0 z-[60] flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-background overscroll-contain">
           <div className="flex h-20 items-center justify-between border-b border-border px-4 sm:px-6">
             <Link to="/" onClick={() => setOpen(false)} aria-label={settings.name}>
               <Logo />
@@ -198,7 +205,14 @@ export function Header() {
               </button>
             </div>
           </div>
-          <nav className="overflow-y-auto px-6 py-4" aria-label="Mobile">
+          <nav className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain px-6 py-4 pb-10" aria-label="Mobile">
+            <Link
+              to="/track"
+              onClick={() => setOpen(false)}
+              className="mb-3 flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3.5 text-lg font-bold text-primary-foreground shadow-sm"
+            >
+              <PackageSearch className="h-5 w-5" /> {t("nav_track")}
+            </Link>
             {nav.map((item) => (
               <div key={item.key} className="border-b border-border/50">
                 <Link
