@@ -734,24 +734,30 @@ export async function setOrderStatus(id: string, patch: OrderPatch) {
   // net for legacy orders created before that change (stock_applied=false).
   if (patch.payment_status === "paid" || patch.status === "processing") await applyStockOnce(id);
 
-  // Notify the customer when the order ships or is delivered/completed —
-  // previously the only notification was a manual WhatsApp message the
-  // admin had to remember to send from the Deliveries panel.
-  if (
-    (patch.status === "shipped" || patch.status === "delivered" || patch.status === "completed") &&
-    updatedOrder?.customer_email
-  ) {
+  // Notify the customer for every customer-visible lifecycle change, not only
+  // shipping. The branded template includes the current payment/status state.
+  const customerStatus = patch.status || (patch.payment_status === "refunded" ? "refunded" : patch.payment_status === "failed" ? "failed" : undefined);
+  if (customerStatus && ["processing", "shipped", "delivered", "completed", "cancelled", "refunded", "failed"].includes(customerStatus) && updatedOrder?.customer_email) {
     sendOrderStatusEmail(
       {
         order_no: updatedOrder.order_no as string,
         customer_name: updatedOrder.customer_name as string,
         customer_email: updatedOrder.customer_email as string,
+        address1: updatedOrder.address1 as string | null,
+        address2: updatedOrder.address2 as string | null,
+        city: updatedOrder.city as string | null,
+        state: updatedOrder.state as string | null,
+        postcode: updatedOrder.postcode as string | null,
+        currency: updatedOrder.currency as string | null,
+        total: Number(updatedOrder.total),
+        payment_status: updatedOrder.payment_status as string | null,
+        status: updatedOrder.status as string | null,
         courier: updatedOrder.courier as string | null,
         tracking_number: updatedOrder.tracking_number as string | null,
         tracking_url: updatedOrder.tracking_url as string | null,
         delivery_note: updatedOrder.delivery_note as string | null,
       },
-      patch.status,
+      customerStatus as Parameters<typeof sendOrderStatusEmail>[1],
     ).catch(() => undefined);
   }
 

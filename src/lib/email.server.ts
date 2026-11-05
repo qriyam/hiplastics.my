@@ -1,14 +1,6 @@
 /**
- * Order confirmation emails, sent via the Resend HTTP API (plain fetch — no
- * SDK/dependency needed). Configure with:
- *   RESEND_API_KEY     - from resend.com (free tier is plenty for this volume)
- *   ORDER_EMAIL_FROM   - e.g. "Hiplastics Malaysia <orders@hiplastics.my>"
- *                        (must be a domain verified in your Resend account)
- *
- * If RESEND_API_KEY isn't set, sending is silently skipped (logged once) so
- * local/dev environments and deployments that haven't configured it yet don't
- * break checkout — email is a nice-to-have layered on top of the order
- * record, never a requirement for placing an order.
+ * Branded transactional email templates sent through Resend.
+ * Configure RESEND_API_KEY and ORDER_EMAIL_FROM in the deployment environment.
  */
 
 type OrderForEmail = {
@@ -32,80 +24,87 @@ type OrderForEmail = {
 
 type OrderItemForEmail = { name: string; qty: number; unit_price: number; line_total: number };
 
+type OrderStatusForEmail = {
+  order_no: string;
+  customer_name: string;
+  customer_email: string;
+  customer_phone?: string | null;
+  address1?: string | null;
+  address2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postcode?: string | null;
+  currency?: string | null;
+  total?: number | null;
+  payment_status?: string | null;
+  status?: string | null;
+  courier?: string | null;
+  tracking_number?: string | null;
+  tracking_url?: string | null;
+  delivery_note?: string | null;
+};
+
+const BRAND = "#1f4fd1";
+const BRAND_DARK = "#173da7";
+const TEXT = "#162033";
+const MUTED = "#64748b";
+const BORDER = "#dbe3ef";
+const SURFACE = "#f4f7fb";
+
 function money(n: number, currency: string) {
   return `${currency} ${Number(n || 0).toFixed(2)}`;
 }
 
-function trackUrl(orderNo: string) {
-  const base = (process.env.APP_BASE_URL || process.env.PUBLIC_SITE_URL || "https://hiplastics.my").replace(/\/+$/, "");
-  return `${base}/track`;
+function baseUrl() {
+  return (process.env.APP_BASE_URL || process.env.PUBLIC_SITE_URL || "https://hiplastics.my").replace(/\/+$/, "");
 }
 
-function buildHtml(order: OrderForEmail, items: OrderItemForEmail[], kind: "cod" | "paid") {
-  const rows = items
-    .map(
-      (i) => `<tr>
-        <td style="padding:8px 0;border-bottom:1px solid #eee;">${escapeHtml(i.name)}</td>
-        <td style="padding:8px 0;border-bottom:1px solid #eee;text-align:center;">${i.qty}</td>
-        <td style="padding:8px 0;border-bottom:1px solid #eee;text-align:right;">${money(i.unit_price, order.currency)}</td>
-        <td style="padding:8px 0;border-bottom:1px solid #eee;text-align:right;">${money(i.line_total, order.currency)}</td>
-      </tr>`,
-    )
-    .join("");
-
-  const heading =
-    kind === "cod"
-      ? "Order received — cash on delivery"
-      : "Payment received — your order is confirmed";
-
-  return `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#111;">
-    <h2 style="margin:0 0 4px;">${heading}</h2>
-    <p style="color:#555;margin:0 0 20px;">Order <strong>${escapeHtml(order.order_no)}</strong></p>
-    <p>Hi ${escapeHtml(order.customer_name)},</p>
-    <p>Thanks for your order! Here's a summary:</p>
-    <table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:12px;">
-      <thead>
-        <tr style="text-align:left;color:#555;font-size:12px;text-transform:uppercase;">
-          <th style="padding-bottom:6px;">Item</th><th style="text-align:center;">Qty</th><th style="text-align:right;">Unit</th><th style="text-align:right;">Total</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <table style="width:100%;margin-top:10px;font-size:14px;">
-      <tr><td style="color:#555;">Subtotal</td><td style="text-align:right;">${money(order.subtotal, order.currency)}</td></tr>
-      ${order.discount ? `<tr><td style="color:#555;">Discount${order.coupon_code ? ` (${escapeHtml(order.coupon_code)})` : ""}</td><td style="text-align:right;">-${money(order.discount, order.currency)}</td></tr>` : ""}
-      <tr><td style="color:#555;">Shipping</td><td style="text-align:right;">${money(order.shipping, order.currency)}</td></tr>
-      <tr><td style="color:#555;">SST</td><td style="text-align:right;">${money(order.tax, order.currency)}</td></tr>
-      <tr><td style="font-weight:bold;padding-top:6px;">Total</td><td style="text-align:right;font-weight:bold;padding-top:6px;">${money(order.total, order.currency)}</td></tr>
-    </table>
-    <p style="margin-top:20px;color:#555;">Delivering to:<br>${escapeHtml(order.address1)}${order.address2 ? `, ${escapeHtml(order.address2)}` : ""}<br>${escapeHtml(order.postcode)} ${escapeHtml(order.city)}, ${escapeHtml(order.state)}</p>
-    <p style="margin-top:24px;">
-      <a href="${trackUrl(order.order_no)}" style="background:#1f8fd1;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold;">Track your order</a>
-    </p>
-    <p style="margin-top:16px;color:#999;font-size:12px;">You'll need your order number (${escapeHtml(order.order_no)}) and this email address to look it up.</p>
-  </div>`;
+function logoUrl() {
+  return process.env.EMAIL_LOGO_URL || `${baseUrl()}/hiplastics-logo.png`;
 }
 
-function escapeHtml(s: string) {
+function trackUrl() {
+  return `${baseUrl()}/track`;
+}
+
+function escapeHtml(s: unknown) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string);
 }
 
-function wrap(inner: string) {
-  return `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#111;">${inner}</div>`;
+function addressHtml(order: { address1?: string | null; address2?: string | null; postcode?: string | null; city?: string | null; state?: string | null }) {
+  if (!order.address1) return "Not provided";
+  return `${escapeHtml(order.address1)}${order.address2 ? `, ${escapeHtml(order.address2)}` : ""}<br>${escapeHtml(order.postcode || "")} ${escapeHtml(order.city || "")}, ${escapeHtml(order.state || "")}`;
+}
+
+function addressText(order: { address1?: string | null; address2?: string | null; postcode?: string | null; city?: string | null; state?: string | null }) {
+  return [order.address1, order.address2, [order.postcode, order.city, order.state].filter(Boolean).join(" ")].filter(Boolean).join(", ") || "Not provided";
 }
 
 function ctaButton(href: string, label: string) {
-  return `<p style="margin-top:24px;"><a href="${href}" style="background:#1f8fd1;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold;">${escapeHtml(label)}</a></p>`;
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0 8px;"><tr><td align="center" bgcolor="${BRAND}" style="border-radius:8px;background:${BRAND};"><a href="${escapeHtml(href)}" style="display:inline-block;background:${BRAND};border:1px solid ${BRAND};border-radius:8px;color:#ffffff !important;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;line-height:20px;padding:13px 22px;text-decoration:none;">${escapeHtml(label)}</a></td></tr></table>`;
+}
+
+function shell(inner: string, preheader: string) {
+  return `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"></head><body style="margin:0;padding:0;background:${SURFACE};font-family:Arial,Helvetica,sans-serif;color:${TEXT};"><div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${escapeHtml(preheader)}</div><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${SURFACE};"><tr><td align="center" style="padding:24px 12px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:620px;background:#ffffff;border:1px solid ${BORDER};border-radius:14px;overflow:hidden;"><tr><td style="background:${BRAND};padding:20px 24px;"><a href="${baseUrl()}" style="text-decoration:none;"><img src="${logoUrl()}" width="52" height="52" alt="Hiplastics Malaysia" style="display:block;width:52px;height:52px;object-fit:contain;border-radius:10px;background:#ffffff;padding:5px;border:0;"></a></td></tr><tr><td style="padding:28px 28px 30px;">${inner}</td></tr><tr><td style="border-top:1px solid ${BORDER};background:#f8fafc;padding:18px 28px;color:${MUTED};font-size:12px;line-height:18px;"><strong style="color:${TEXT};">Hiplastics Malaysia</strong><br>Retail Display &amp; ESL Accessory Solutions<br><a href="mailto:sales@hiplastics.my" style="color:${BRAND};text-decoration:none;">sales@hiplastics.my</a> · <a href="${trackUrl()}" style="color:${BRAND};text-decoration:none;">Track an order</a><br><span>This is an automated order update. Please reply if you need help.</span></td></tr></table><p style="margin:14px 0 0;color:${MUTED};font-size:11px;line-height:16px;">© ${new Date().getFullYear()} Hiplastics Malaysia</p></td></tr></table></body></html>`;
+}
+
+function buildConfirmationHtml(order: OrderForEmail, items: OrderItemForEmail[], kind: "cod" | "paid") {
+  const rows = items.map((i) => `<tr><td style="padding:12px 8px 12px 0;border-bottom:1px solid ${BORDER};font-size:14px;line-height:19px;">${escapeHtml(i.name)}</td><td style="padding:12px 4px;border-bottom:1px solid ${BORDER};text-align:center;font-size:14px;">${i.qty}</td><td style="padding:12px 0 12px 8px;border-bottom:1px solid ${BORDER};text-align:right;font-size:14px;white-space:nowrap;">${money(i.line_total, order.currency)}</td></tr>`).join("");
+  const paid = kind === "paid";
+  const title = paid ? "Payment received — order confirmed" : "Order received — cash on delivery";
+  const intro = paid ? "Your online payment was received successfully. We are now preparing your order." : "We have received your order. Payment will be collected on delivery.";
+  const html = shell(`<div style="display:inline-block;background:${paid ? "#e9f7ef" : "#eef4ff"};color:${paid ? "#167447" : BRAND};border-radius:999px;padding:7px 12px;font-size:12px;font-weight:bold;text-transform:uppercase;letter-spacing:.4px;">${paid ? "Payment confirmed" : "Order received"}</div><h1 style="margin:16px 0 6px;font-size:28px;line-height:34px;color:${TEXT};">${title}</h1><p style="margin:0;color:${MUTED};font-size:14px;">Order <strong style="color:${TEXT};">${escapeHtml(order.order_no)}</strong></p><p style="margin:24px 0 8px;font-size:16px;line-height:25px;">Hi ${escapeHtml(order.customer_name)},</p><p style="margin:0;font-size:15px;line-height:24px;color:#334155;">${intro}</p><div style="margin:22px 0;border:1px solid ${BORDER};border-radius:10px;overflow:hidden;"><div style="background:#f8fafc;padding:12px 14px;font-size:12px;font-weight:bold;text-transform:uppercase;letter-spacing:.5px;color:${BRAND};">Order summary</div><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;padding:0 14px;"><tr><th align="left" style="padding:10px 8px 8px 14px;color:${MUTED};font-size:11px;text-transform:uppercase;">Item</th><th style="padding:10px 4px 8px;color:${MUTED};font-size:11px;text-transform:uppercase;">Qty</th><th align="right" style="padding:10px 14px 8px 8px;color:${MUTED};font-size:11px;text-transform:uppercase;">Total</th></tr>${rows}</table><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="padding:10px 14px 14px;font-size:14px;"><tr><td style="color:${MUTED};padding:3px 0;">Subtotal</td><td align="right" style="padding:3px 0;">${money(order.subtotal, order.currency)}</td></tr>${order.discount ? `<tr><td style="color:${MUTED};padding:3px 0;">Discount${order.coupon_code ? ` (${escapeHtml(order.coupon_code)})` : ""}</td><td align="right" style="padding:3px 0;">-${money(order.discount, order.currency)}</td></tr>` : ""}<tr><td style="color:${MUTED};padding:3px 0;">Shipping</td><td align="right" style="padding:3px 0;">${money(order.shipping, order.currency)}</td></tr><tr><td style="color:${MUTED};padding:3px 0;">SST</td><td align="right" style="padding:3px 0;">${money(order.tax, order.currency)}</td></tr><tr><td style="border-top:2px solid ${BORDER};padding:10px 0 0;font-size:16px;font-weight:bold;">Total</td><td align="right" style="border-top:2px solid ${BORDER};padding:10px 0 0;color:${BRAND};font-size:16px;font-weight:bold;">${money(order.total, order.currency)}</td></tr></table></div><div style="margin:18px 0;padding:15px;border-radius:10px;background:#f8fafc;border:1px solid ${BORDER};font-size:14px;line-height:22px;"><strong style="color:${BRAND};">Delivering to</strong><br>${addressHtml(order)}</div>${ctaButton(trackUrl(), "Track your order")}<p style="margin:10px 0 0;color:${MUTED};font-size:12px;line-height:18px;">Use order number <strong>${escapeHtml(order.order_no)}</strong> and this email address to view the latest payment and delivery status.</p>`, `${title} — order ${order.order_no}`);
+  return html;
+}
+
+function buildConfirmationText(order: OrderForEmail, items: OrderItemForEmail[], kind: "cod" | "paid") {
+  const lines = items.map((i) => `- ${i.name} × ${i.qty}: ${money(i.line_total, order.currency)}`).join("\n");
+  return `${kind === "paid" ? "Payment received — order confirmed" : "Order received — cash on delivery"}\nOrder: ${order.order_no}\n\nHi ${order.customer_name},\n\n${kind === "paid" ? "Your online payment was received successfully." : "We have received your order. Payment will be collected on delivery."}\n\nItems:\n${lines}\n\nTotal: ${money(order.total, order.currency)}\nDelivering to: ${addressText(order)}\n\nTrack your order: ${trackUrl()}\n\nHiplastics Malaysia\nsales@hiplastics.my`;
 }
 
 let warnedOnce = false;
 
-/**
- * Shared low-level sender. Never throws — logs and returns false on
- * failure, so every caller can safely fire-and-forget (`.catch(() =>
- * undefined)`), matching the original order-confirmation behavior.
- */
-async function sendViaResend(to: string, subject: string, html: string): Promise<boolean> {
+async function sendViaResend(to: string, subject: string, html: string, text: string) {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.ORDER_EMAIL_FROM;
   if (!apiKey || !from) {
@@ -119,7 +118,7 @@ async function sendViaResend(to: string, subject: string, html: string): Promise
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from, to, subject, html }),
+      body: JSON.stringify({ from, to, subject, html, text, reply_to: process.env.ORDER_EMAIL_REPLY_TO || "sales@hiplastics.my" }),
     });
     if (!res.ok) {
       console.error("[email] Resend API error", res.status, await res.text().catch(() => ""));
@@ -132,121 +131,52 @@ async function sendViaResend(to: string, subject: string, html: string): Promise
   }
 }
 
-/** Fire-and-forget order confirmation email. Never throws — logs and returns on failure. */
-export async function sendOrderConfirmationEmail(
-  order: OrderForEmail,
-  items: OrderItemForEmail[],
-  kind: "cod" | "paid",
-) {
-  await sendViaResend(
-    order.customer_email,
-    kind === "cod"
-      ? `Order ${order.order_no} received — Hiplastics Malaysia`
-      : `Payment confirmed for order ${order.order_no} — Hiplastics Malaysia`,
-    buildHtml(order, items, kind),
-  );
+export async function sendOrderConfirmationEmail(order: OrderForEmail, items: OrderItemForEmail[], kind: "cod" | "paid") {
+  const subject = kind === "cod" ? `Order ${order.order_no} received — Hiplastics Malaysia` : `Payment confirmed for order ${order.order_no} — Hiplastics Malaysia`;
+  await sendViaResend(order.customer_email, subject, buildConfirmationHtml(order, items, kind), buildConfirmationText(order, items, kind));
 }
 
-type OrderStatusForEmail = {
-  order_no: string;
-  customer_name: string;
-  customer_email: string;
-  courier?: string | null;
-  tracking_number?: string | null;
-  tracking_url?: string | null;
-  delivery_note?: string | null;
-};
-
-/**
- * Order status update email — sent when an admin marks an order "shipped"
- * or "delivered"/"completed". Previously the only way a customer found out
- * was the admin manually messaging them on WhatsApp; this adds an automatic
- * email alongside that, using the same tracking info already entered in
- * the admin Deliveries panel.
- */
-export async function sendOrderStatusEmail(order: OrderStatusForEmail, status: "shipped" | "delivered" | "completed") {
-  const isShipped = status === "shipped";
-  const heading = isShipped ? "Your order has shipped!" : "Your order has been delivered";
-  const trackingBlock =
-    isShipped && (order.courier || order.tracking_number)
-      ? `<table style="width:100%;margin-top:14px;font-size:14px;border:1px solid #eee;border-radius:8px;">
-          <tr><td style="padding:10px 12px;color:#555;">Courier</td><td style="padding:10px 12px;text-align:right;font-weight:bold;">${escapeHtml(order.courier || "—")}</td></tr>
-          <tr><td style="padding:10px 12px;color:#555;border-top:1px solid #eee;">Tracking No.</td><td style="padding:10px 12px;text-align:right;font-weight:bold;border-top:1px solid #eee;">${escapeHtml(order.tracking_number || "—")}</td></tr>
-        </table>`
-      : "";
-  const note = order.delivery_note ? `<p style="margin-top:14px;color:#555;">${escapeHtml(order.delivery_note)}</p>` : "";
-  const html = wrap(`
-    <h2 style="margin:0 0 4px;">${heading}</h2>
-    <p style="color:#555;margin:0 0 20px;">Order <strong>${escapeHtml(order.order_no)}</strong></p>
-    <p>Hi ${escapeHtml(order.customer_name)},</p>
-    <p>${isShipped ? "Your order is on its way." : "Your order has arrived — we hope you love it!"}</p>
-    ${trackingBlock}
-    ${note}
-    ${order.tracking_url ? ctaButton(order.tracking_url, "Track shipment") : ctaButton(trackUrl(order.order_no), "Track your order")}
-  `);
-  await sendViaResend(order.customer_email, `Order ${order.order_no} ${isShipped ? "shipped" : "delivered"} — Hiplastics Malaysia`, html);
+function statusCopy(status: string) {
+  const labels: Record<string, { title: string; body: string }> = {
+    processing: { title: "Your order is being prepared", body: "Our team has started preparing your order." },
+    shipped: { title: "Your order has shipped", body: "Your order is on its way." },
+    delivered: { title: "Your order has been delivered", body: "Your order has arrived — we hope you love it!" },
+    completed: { title: "Your order is complete", body: "Thank you for shopping with Hiplastics Malaysia." },
+    cancelled: { title: "Your order was cancelled", body: "This order has been cancelled and will not be delivered." },
+  };
+  return labels[status] || { title: "Your order status was updated", body: "Your order details have been updated." };
 }
 
-/**
- * Low-stock alert, sent to the store owner (not the customer) whenever an
- * order pushes a product's stock at or below a threshold. Configure the
- * recipient with ADMIN_ALERT_EMAIL (falls back to site.email if unset).
- */
+export async function sendOrderStatusEmail(order: OrderStatusForEmail, status: "processing" | "shipped" | "delivered" | "completed" | "cancelled" | "refunded" | "failed") {
+  const normalized = status === "refunded" || status === "failed" ? "cancelled" : status;
+  const copy = statusCopy(normalized);
+  const currency = order.currency || "MYR";
+  const tracking = order.courier || order.tracking_number ? `<div style="margin:20px 0;padding:15px;border:1px solid ${BORDER};border-radius:10px;background:#f8fafc;font-size:14px;line-height:23px;"><strong style="color:${BRAND};">Delivery details</strong><br>${order.courier ? `Courier: <strong>${escapeHtml(order.courier)}</strong><br>` : ""}${order.tracking_number ? `Tracking number: <strong>${escapeHtml(order.tracking_number)}</strong>` : ""}${order.delivery_note ? `<br><span style="color:${MUTED};">${escapeHtml(order.delivery_note)}</span>` : ""}</div>` : "";
+  const html = shell(`<div style="display:inline-block;background:${normalized === "cancelled" ? "#fff1f2" : "#e9f7ef"};color:${normalized === "cancelled" ? "#b42318" : "#167447"};border-radius:999px;padding:7px 12px;font-size:12px;font-weight:bold;text-transform:uppercase;letter-spacing:.4px;">${escapeHtml(normalized)}</div><h1 style="margin:16px 0 6px;font-size:28px;line-height:34px;color:${TEXT};">${copy.title}</h1><p style="margin:0;color:${MUTED};font-size:14px;">Order <strong style="color:${TEXT};">${escapeHtml(order.order_no)}</strong></p><p style="margin:24px 0 8px;font-size:16px;line-height:25px;">Hi ${escapeHtml(order.customer_name)},</p><p style="margin:0;font-size:15px;line-height:24px;color:#334155;">${copy.body}</p><div style="margin:20px 0;padding:15px;border:1px solid ${BORDER};border-radius:10px;background:#ffffff;font-size:14px;line-height:23px;"><strong style="color:${BRAND};">Order summary</strong><br>${order.total != null ? `Order total: <strong>${money(order.total, currency)}</strong><br>` : ""}Payment status: <strong>${escapeHtml(order.payment_status || "updated")}</strong><br>Current order status: <strong>${escapeHtml(order.status || normalized)}</strong></div>${tracking}${order.address1 ? `<div style="margin:18px 0;padding:15px;border-radius:10px;background:#f8fafc;border:1px solid ${BORDER};font-size:14px;line-height:22px;"><strong style="color:${BRAND};">Delivery address</strong><br>${addressHtml(order)}</div>` : ""}${ctaButton(order.tracking_url || trackUrl(), order.tracking_url ? "Track shipment" : "View your order")}<p style="margin:10px 0 0;color:${MUTED};font-size:12px;line-height:18px;">You can always see the latest payment and delivery update using the order number above.</p>`, `${copy.title} — order ${order.order_no}`);
+  const text = `${copy.title}\nOrder: ${order.order_no}\n\nHi ${order.customer_name},\n\n${copy.body}\n\nPayment status: ${order.payment_status || "updated"}\nOrder status: ${order.status || normalized}\n${order.total != null ? `Total: ${money(order.total, currency)}\n` : ""}${order.tracking_number ? `Tracking: ${order.courier || ""} ${order.tracking_number}\n` : ""}\nView your order: ${order.tracking_url || trackUrl()}\n\nHiplastics Malaysia\nsales@hiplastics.my`;
+  await sendViaResend(order.customer_email, `${copy.title} — ${order.order_no} — Hiplastics Malaysia`, html, text);
+}
+
 export async function sendLowStockAlertEmail(product: { name: string; slug: string; stock: number }) {
-  const to = process.env.ADMIN_ALERT_EMAIL || "sales@hiplastics.com.my";
-  const html = wrap(`
-    <h2 style="margin:0 0 12px;">Low stock alert</h2>
-    <p><strong>${escapeHtml(product.name)}</strong> (${escapeHtml(product.slug)}) has only <strong>${product.stock}</strong> unit(s) left.</p>
-    <p style="color:#555;">Restock it soon, or it'll go out of stock and stop appearing as purchasable on the site.</p>
-  `);
-  await sendViaResend(to, `Low stock: ${product.name} (${product.stock} left) — Hiplastics Malaysia`, html);
+  const to = process.env.ADMIN_ALERT_EMAIL || "sales@hiplastics.my";
+  const html = shell(`<h1 style="margin:0 0 10px;font-size:26px;color:${TEXT};">Low stock alert</h1><p style="font-size:16px;line-height:24px;"><strong>${escapeHtml(product.name)}</strong> has only <strong>${product.stock}</strong> unit(s) left.</p>${ctaButton(`${baseUrl()}/admin`, "Open admin panel")}`, `Low stock alert for ${product.name}`);
+  await sendViaResend(to, `Low stock: ${product.name} (${product.stock} left) — Hiplastics Malaysia`, html, `Low stock alert\n${product.name} (${product.slug}) has ${product.stock} unit(s) left.\nOpen admin panel: ${baseUrl()}/admin`);
 }
 
-/** Alert staff when a gateway confirms payment for an order already cancelled. */
 export async function sendCancelledPaymentAlert(order: { order_no: string; total: number; currency: string; transaction_id?: string }) {
   const to = process.env.ADMIN_ALERT_EMAIL || "sales@hiplastics.my";
-  const html = wrap(`
-    <h2 style="margin:0 0 12px;color:#b42318;">Payment received after cancellation</h2>
-    <p>Order <strong>${escapeHtml(order.order_no)}</strong> is cancelled but ToyyibPay reports a successful payment.</p>
-    <p>Expected total: <strong>${money(order.total, order.currency)}</strong><br>Transaction: <strong>${escapeHtml(order.transaction_id || "—")}</strong></p>
-    <p>Please reconcile this payment manually before fulfilling or refunding the order.</p>
-  `);
-  await sendViaResend(to, `Action required: paid cancelled order ${order.order_no} — Hiplastics Malaysia`, html);
+  const html = shell(`<div style="display:inline-block;background:#fff1f2;color:#b42318;border-radius:999px;padding:7px 12px;font-size:12px;font-weight:bold;text-transform:uppercase;">Action required</div><h1 style="margin:16px 0 10px;font-size:26px;color:${TEXT};">Payment received after cancellation</h1><p style="font-size:15px;line-height:24px;">Order <strong>${escapeHtml(order.order_no)}</strong> is cancelled but ToyyibPay reports a successful payment.</p><div style="margin:18px 0;padding:15px;border:1px solid ${BORDER};border-radius:10px;line-height:24px;">Expected total: <strong>${money(order.total, order.currency)}</strong><br>Transaction: <strong>${escapeHtml(order.transaction_id || "—")}</strong></div>${ctaButton(`${baseUrl()}/admin`, "Review in admin panel")}`, `Action required: paid cancelled order ${order.order_no}`);
+  await sendViaResend(to, `Action required: paid cancelled order ${order.order_no} — Hiplastics Malaysia`, html, `Payment received after cancellation. Order ${order.order_no}; total ${money(order.total, order.currency)}; transaction ${order.transaction_id || "—"}. Review: ${baseUrl()}/admin`);
 }
 
-/**
- * Back-in-stock notification, sent to every customer who asked to be
- * notified for a product (see stock_notify_requests table / requestStockNotify
- * server fn) once an admin restocks it above zero.
- */
 export async function sendBackInStockEmail(to: string, product: { name: string; slug: string }) {
-  const url = `${(process.env.APP_BASE_URL || process.env.PUBLIC_SITE_URL || "https://hiplastics.my").replace(/\/+$/, "")}/products/${product.slug}`;
-  const html = wrap(`
-    <h2 style="margin:0 0 12px;">Good news — it's back in stock!</h2>
-    <p><strong>${escapeHtml(product.name)}</strong> is available again.</p>
-    ${ctaButton(url, "View product")}
-  `);
-  await sendViaResend(to, `${product.name} is back in stock — Hiplastics Malaysia`, html);
+  const url = `${baseUrl()}/products/${product.slug}`;
+  const html = shell(`<div style="display:inline-block;background:#e9f7ef;color:#167447;border-radius:999px;padding:7px 12px;font-size:12px;font-weight:bold;text-transform:uppercase;">Back in stock</div><h1 style="margin:16px 0 10px;font-size:26px;color:${TEXT};">Good news — it is available again</h1><p style="font-size:15px;line-height:24px;"><strong>${escapeHtml(product.name)}</strong> is back in stock.</p>${ctaButton(url, "View product")}`, `${product.name} is back in stock`);
+  await sendViaResend(to, `${product.name} is back in stock — Hiplastics Malaysia`, html, `${product.name} is back in stock. View it here: ${url}`);
 }
 
-/**
- * Abandoned cart reminder — sent by the daily cron (see
- * routes/api/public/cart-reminder-cron.ts) to signed-in customers who left
- * items in their cart for a while without checking out.
- */
-export async function sendCartReminderEmail(
-  to: string,
-  name: string,
-  items: { name: string; qty: number }[],
-) {
-  const lines = items.map((i) => `<li>${escapeHtml(i.name)} × ${i.qty}</li>`).join("");
-  const url = `${(process.env.APP_BASE_URL || process.env.PUBLIC_SITE_URL || "https://hiplastics.my").replace(/\/+$/, "")}/cart`;
-  const html = wrap(`
-    <h2 style="margin:0 0 12px;">You left something in your cart</h2>
-    <p>Hi ${escapeHtml(name || "there")},</p>
-    <p>These items are still waiting for you:</p>
-    <ul style="font-size:14px;color:#333;line-height:1.8;">${lines}</ul>
-    ${ctaButton(url, "Complete your order")}
-  `);
-  await sendViaResend(to, "You left something in your cart — Hiplastics Malaysia", html);
+export async function sendCartReminderEmail(to: string, name: string, items: { name: string; qty: number }[]) {
+  const lines = items.map((i) => `- ${i.name} × ${i.qty}`).join("\n");
+  const html = shell(`<h1 style="margin:0 0 10px;font-size:26px;color:${TEXT};">You left something in your cart</h1><p style="font-size:16px;line-height:24px;">Hi ${escapeHtml(name || "there")},</p><p style="font-size:15px;line-height:24px;">These items are still waiting for you:</p><div style="margin:18px 0;padding:15px;border:1px solid ${BORDER};border-radius:10px;background:#f8fafc;font-size:14px;line-height:26px;">${items.map((i) => `${escapeHtml(i.name)} × ${i.qty}`).join("<br>")}</div>${ctaButton(`${baseUrl()}/cart`, "Complete your order")}`, "You left something in your Hiplastics cart");
+  await sendViaResend(to, "You left something in your cart — Hiplastics Malaysia", html, `You left something in your cart:\n${lines}\n\nComplete your order: ${baseUrl()}/cart`);
 }
