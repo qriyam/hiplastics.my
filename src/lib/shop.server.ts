@@ -738,6 +738,10 @@ export async function setOrderStatus(id: string, patch: OrderPatch) {
   // shipping. The branded template includes the current payment/status state.
   const customerStatus = patch.status || (patch.payment_status === "refunded" ? "refunded" : patch.payment_status === "failed" ? "failed" : undefined);
   if (customerStatus && ["processing", "shipped", "delivered", "completed", "cancelled", "refunded", "failed"].includes(customerStatus) && updatedOrder?.customer_email) {
+    const { data: statusItems } = await admin
+      .from("order_items")
+      .select("name, qty, unit_price, line_total, image_url")
+      .eq("order_id", id);
     sendOrderStatusEmail(
       {
         order_no: updatedOrder.order_no as string,
@@ -758,6 +762,7 @@ export async function setOrderStatus(id: string, patch: OrderPatch) {
         delivery_note: updatedOrder.delivery_note as string | null,
       },
       customerStatus as Parameters<typeof sendOrderStatusEmail>[1],
+      (statusItems ?? []) as Parameters<typeof sendOrderStatusEmail>[2],
     ).catch(() => undefined);
   }
 
