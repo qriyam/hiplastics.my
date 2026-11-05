@@ -175,7 +175,35 @@
   color: transparent;
 }
 
+@page {
+  size: A4;
+  margin: 8mm;
+}
+
 @media print {
+  html, body { background: #fff !important; }
+  body { color: #111 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   header, footer, aside[aria-label="Shopping cart"], .print\:hidden { display: none !important; }
-  #invoice { border: none !important; padding: 0 !important; }
+  section { padding-top: 0 !important; padding-bottom: 0 !important; }
+  #invoice {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    font-size: 10pt;
+  }
+  #invoice .invoice-print-block {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  #invoice table, #invoice tr { break-inside: avoid; page-break-inside: avoid; }
+  #invoice .p-6 { padding: 12px !important; }
+  #invoice .mx-6 { margin-left: 12px !important; margin-right: 12px !important; }
+  #invoice .mt-4 { margin-top: 8px !important; }
+  #invoice .py-4 { padding-top: 8px !important; padding-bottom: 8px !important; }
+  #invoice .py-2\.5 { padding-top: 6px !important; padding-bottom: 6px !important; }
+  #invoice .gap-4 { gap: 10px !important; }
 }

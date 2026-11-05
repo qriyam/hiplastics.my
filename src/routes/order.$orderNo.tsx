@@ -165,10 +165,10 @@ function OrderPage() {
           <div
             id="invoice"
             style={settings.invoice_accent_color ? ({ "--invoice-accent": settings.invoice_accent_color } as React.CSSProperties) : undefined}
-            className="relative mt-6 overflow-hidden rounded-xl border border-border bg-white shadow-sm print:shadow-none"
+            className="relative mt-6 overflow-hidden rounded-xl border border-border bg-white shadow-sm print:mt-0 print:shadow-none"
           >
             {/* Header band */}
-            <div className="flex flex-wrap items-start justify-between gap-4 bg-gradient-to-r from-[var(--invoice-accent,var(--color-primary))]/5 to-transparent p-6">
+            <div className="invoice-print-block flex flex-wrap items-start justify-between gap-4 bg-gradient-to-r from-[var(--invoice-accent,var(--color-primary))]/5 to-transparent p-6">
               <div className="flex items-center gap-3">
                 {settings.logo_url ? (
                   <img src={settings.logo_url} alt={settings.name || site.name} className="h-14 w-14 shrink-0 rounded-lg border border-border/60 bg-white object-contain p-1.5" />
@@ -201,13 +201,13 @@ function OrderPage() {
             )}
 
             {/* Status banner */}
-            <div className={`mx-6 flex items-center gap-2 rounded-lg border p-3 text-sm font-semibold ${isCancelled ? "border-destructive/30 bg-destructive/5 text-destructive" : paid || cod ? "border-[var(--invoice-accent,var(--color-primary))]/30 bg-[var(--invoice-accent,var(--color-primary))]/5 text-[var(--invoice-accent,var(--color-primary))]" : "border-border bg-secondary text-muted-foreground"}`}>
+            <div className={`invoice-print-block mx-6 flex items-center gap-2 rounded-lg border p-3 text-sm font-semibold ${isCancelled ? "border-destructive/30 bg-destructive/5 text-destructive" : paid || cod ? "border-[var(--invoice-accent,var(--color-primary))]/30 bg-[var(--invoice-accent,var(--color-primary))]/5 text-[var(--invoice-accent,var(--color-primary))]" : "border-border bg-secondary text-muted-foreground"}`}>
               {isCancelled ? <XCircle className="h-4 w-4 shrink-0" /> : paid || cod ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <Clock className="h-4 w-4 shrink-0" />}
               {isCancelled ? (order.payment_status === "refunded" ? "Order Refunded" : "Order Cancelled") : paid ? "Payment Successful — Order Confirmed" : cod ? "Order Confirmed — Cash on Delivery" : `Payment ${order.payment_status}`}
             </div>
 
             {/* Delivery timeline — always present so the first invoice clearly shows the current order state. */}
-            <div className={`mx-6 mt-4 rounded-lg border p-4 ${isCancelled ? "border-destructive/30 bg-destructive/5" : "border-border bg-surface/40"}`}>
+            <div className={`invoice-print-block mx-6 mt-4 rounded-lg border p-4 ${isCancelled ? "border-destructive/30 bg-destructive/5" : "border-border bg-surface/40"}`}>
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div className={`text-xs font-bold uppercase tracking-wide ${isCancelled ? "text-destructive" : "text-[var(--invoice-accent,var(--color-primary))]"}`}>{isCancelled ? "Order status update" : "Order tracking update"}</div>
                   <div className={`rounded-full px-2.5 py-1 text-[11px] font-bold uppercase ${isCancelled ? "bg-destructive/10 text-destructive" : "bg-secondary text-foreground"}`}>{isCancelled ? (order.payment_status === "refunded" ? "Refunded" : "Cancelled") : order.status}</div>
@@ -262,7 +262,7 @@ function OrderPage() {
                 {order.delivery_note && <p className="mt-1 text-xs text-muted-foreground">{order.delivery_note}</p>}
               </div>
 
-            <div className="p-6">
+            <div className="invoice-print-block p-6">
               <div className="grid gap-4 border-b border-border pb-4 text-sm sm:grid-cols-2">
                 <div>
                   <div className="text-xs font-bold uppercase tracking-wide text-[var(--invoice-accent,var(--color-primary))]">From (Seller)</div>
@@ -329,7 +329,7 @@ function OrderPage() {
               </dl>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-surface px-6 py-4 text-xs text-muted-foreground">
+            <div className="invoice-print-block flex flex-wrap items-center justify-between gap-3 border-t border-border bg-surface px-6 py-4 text-xs text-muted-foreground">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="h-4 w-4 shrink-0 text-[var(--invoice-accent,var(--color-primary))]" />
                 <span>{settings.invoice_footer_note || "Thank you for your purchase! If you have any questions, feel free to contact us."}</span>
