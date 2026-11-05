@@ -758,7 +758,7 @@ export async function setOrderStatus(id: string, patch: OrderPatch, actorUserId?
   if (patch.payment_status === "paid") update.paid_at = now;
   const { data: updatedOrder, error } = await admin.from("orders").update(update).eq("id", id).select().maybeSingle();
   if (error) throw new Error(error.message);
-  await admin.from("order_status_audit").insert({
+  const { error: auditError } = await admin.from("order_status_audit").insert({
     order_id: id,
     actor_user_id: actorUserId || null,
     previous_status: before.status,
@@ -767,6 +767,7 @@ export async function setOrderStatus(id: string, patch: OrderPatch, actorUserId?
     new_payment_status: updatedOrder?.payment_status ?? before.payment_status,
     changes: patch,
   });
+  if (auditError) console.warn("[order-audit] audit insert skipped:", auditError.message);
   // Stock is now deducted at order-creation time, so this is only a safety
   // net for legacy orders created before that change (stock_applied=false).
   if (patch.payment_status === "paid" || patch.status === "processing") await applyStockOnce(id);
