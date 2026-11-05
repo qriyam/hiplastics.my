@@ -248,8 +248,8 @@ export const adminUpdateOrder = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const { requireAdminToken, setOrderStatus } = await import("./shop.server");
-    await requireAdminToken(data.token);
+    const actorUserId = await requireAdminToken(data.token);
     const { token: _t, id, ...patch } = data;
     void _t;
-    return setOrderStatus(id, patch);
+    return setOrderStatus(id, patch, actorUserId);
   });

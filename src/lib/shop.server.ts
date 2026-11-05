@@ -698,9 +698,37 @@ export type OrderPatch = {
   admin_note?: string;
 };
 
-export async function setOrderStatus(id: string, patch: OrderPatch) {
+export async function setOrderStatus(id: string, patch: OrderPatch, actorUserId?: string) {
   const admin = getAdminClient();
   const now = new Date().toISOString();
+  const { data: before, error: beforeError } = await admin
+    .from("orders")
+    .select("id, status, payment_status")
+    .eq("id", id)
+    .maybeSingle();
+  if (beforeError) throw new Error(beforeError.message);
+  if (!before) throw new Error("Order not found.");
+
+  const allowedStatus: Record<string, string[]> = {
+    new: ["new", "processing", "cancelled"],
+    processing: ["processing", "shipped", "cancelled"],
+    shipped: ["shipped", "delivered", "cancelled"],
+    delivered: ["delivered", "completed"],
+    completed: ["completed"],
+    cancelled: ["cancelled"],
+  };
+  const allowedPayment: Record<string, string[]> = {
+    pending: ["pending", "paid", "failed"],
+    paid: ["paid", "refunded"],
+    failed: ["failed", "refunded"],
+    refunded: ["refunded"],
+  };
+  if (patch.status && !allowedStatus[String(before.status)]?.includes(patch.status)) {
+    throw new Error(`Invalid order status transition: ${before.status} → ${patch.status}.`);
+  }
+  if (patch.payment_status && !allowedPayment[String(before.payment_status)]?.includes(patch.payment_status)) {
+    throw new Error(`Invalid payment status transition: ${before.payment_status} → ${patch.payment_status}.`);
+  }
   const isRestockingEvent =
     patch.status === "cancelled" || patch.payment_status === "failed" || patch.payment_status === "refunded";
 
@@ -730,6 +758,15 @@ export async function setOrderStatus(id: string, patch: OrderPatch) {
   if (patch.payment_status === "paid") update.paid_at = now;
   const { data: updatedOrder, error } = await admin.from("orders").update(update).eq("id", id).select().maybeSingle();
   if (error) throw new Error(error.message);
+  await admin.from("order_status_audit").insert({
+    order_id: id,
+    actor_user_id: actorUserId || null,
+    previous_status: before.status,
+    new_status: updatedOrder?.status ?? before.status,
+    previous_payment_status: before.payment_status,
+    new_payment_status: updatedOrder?.payment_status ?? before.payment_status,
+    changes: patch,
+  });
   // Stock is now deducted at order-creation time, so this is only a safety
   // net for legacy orders created before that change (stock_applied=false).
   if (patch.payment_status === "paid" || patch.status === "processing") await applyStockOnce(id);
@@ -805,5 +842,5 @@ export async function requireAdminToken(accessToken: string) {
     .eq("role", "admin")
     .maybeSingle();
   if (!role) throw new Error("Not authorized — admin role required");
-  return true;
+  return data.user.id;
 }
