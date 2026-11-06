@@ -1117,6 +1117,14 @@ function OrdersPanel({ token, mode, orders, items, onChanged }: {
           </div>
         ))}
       </div>
+      {rows.length > 0 && <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+        <span>Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, rows.length)} of {rows.length} orders</span>
+        <div className="flex items-center gap-2">
+          <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="rounded-md border border-border px-2.5 py-1.5 font-semibold disabled:opacity-40">Previous</button>
+          <span>Page {page} of {pageCount}</span>
+          <button disabled={page >= pageCount} onClick={() => setPage((p) => Math.min(pageCount, p + 1))} className="rounded-md border border-border px-2.5 py-1.5 font-semibold disabled:opacity-40">Next</button>
+        </div>
+      </div>}
     </div>
   );
 }
@@ -1203,14 +1211,6 @@ function PaymentStatusPicker({ status, onSet, disabled }: { status: string; onSe
           </button>
         ))}
       </div>
-      {rows.length > 0 && <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-        <span>Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, rows.length)} of {rows.length} orders</span>
-        <div className="flex items-center gap-2">
-          <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="rounded-md border border-border px-2.5 py-1.5 font-semibold disabled:opacity-40">Previous</button>
-          <span>Page {page} of {pageCount}</span>
-          <button disabled={page >= pageCount} onClick={() => setPage((p) => Math.min(pageCount, p + 1))} className="rounded-md border border-border px-2.5 py-1.5 font-semibold disabled:opacity-40">Next</button>
-        </div>
-      </div>}
     </div>
   );
 }
