@@ -916,17 +916,28 @@ function OrdersPanel({ token, mode, orders, items, onChanged }: {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("all");
   const [saving, setSaving] = useState<string | null>(null);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
 
   const rows = useMemo(() => {
     const base = mode === "deliveries" ? orders.filter((o) => o.payment_status === "paid" || o.payment_method === "cod") : orders;
     const needle = q.trim().toLowerCase();
     return base.filter((o) => {
+      const day = String(o.created_at || "").slice(0, 10);
+      if (fromDate && day < fromDate) return false;
+      if (toDate && day > toDate) return false;
       if (status !== "all" && o.status !== status) return false;
       if (!needle) return true;
       return [o.order_no, o.customer_name, o.customer_phone, o.customer_email, o.tracking_number]
         .some((f) => String(f ?? "").toLowerCase().includes(needle));
     });
-  }, [orders, mode, q, status]);
+  }, [orders, mode, q, status, fromDate, toDate]);
+
+  useEffect(() => { setPage(1); }, [mode, q, status, fromDate, toDate]);
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  const visibleRows = rows.slice((page - 1) * pageSize, page * pageSize);
 
   const statusCounts = useMemo(() => {
     const base = mode === "deliveries" ? orders.filter((o) => o.payment_status === "paid" || o.payment_method === "cod") : orders;
@@ -977,6 +988,9 @@ function OrdersPanel({ token, mode, orders, items, onChanged }: {
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search order no, name, phone, tracking…" className="w-full rounded-md border border-input bg-background py-2 pl-8 pr-3 text-sm sm:w-80" />
         </div>
+        <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} aria-label="Orders from date" className="rounded-md border border-input bg-background px-2.5 py-2 text-xs" />
+        <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} aria-label="Orders to date" className="rounded-md border border-input bg-background px-2.5 py-2 text-xs" />
+        {(fromDate || toDate) && <button onClick={() => { setFromDate(""); setToDate(""); }} className="text-xs font-semibold text-muted-foreground hover:text-foreground">Clear dates</button>}
         <button onClick={exportCsv} className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-semibold hover:bg-secondary">
           <Download className="h-3.5 w-3.5" /> Export CSV
         </button>
@@ -1004,7 +1018,7 @@ function OrdersPanel({ token, mode, orders, items, onChanged }: {
 
       <div className="overflow-hidden rounded-lg border border-border bg-card">
         {rows.length === 0 && <div className="p-6 text-center text-sm text-muted-foreground">No orders match.</div>}
-        {rows.map((o) => (
+        {visibleRows.map((o) => (
           <div key={o.id} className="border-b border-border last:border-b-0">
             <div className="flex flex-wrap items-center gap-2.5 p-3">
               <button onClick={() => setOpenId(open === o.id ? null : o.id)} className="text-sm font-semibold text-foreground underline-offset-2 hover:underline">
@@ -1174,6 +1188,14 @@ function PaymentStatusPicker({ status, onSet, disabled }: { status: string; onSe
           </button>
         ))}
       </div>
+      {rows.length > 0 && <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+        <span>Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, rows.length)} of {rows.length} orders</span>
+        <div className="flex items-center gap-2">
+          <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="rounded-md border border-border px-2.5 py-1.5 font-semibold disabled:opacity-40">Previous</button>
+          <span>Page {page} of {pageCount}</span>
+          <button disabled={page >= pageCount} onClick={() => setPage((p) => Math.min(pageCount, p + 1))} className="rounded-md border border-border px-2.5 py-1.5 font-semibold disabled:opacity-40">Next</button>
+        </div>
+      </div>}
     </div>
   );
 }
