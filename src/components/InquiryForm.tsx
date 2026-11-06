@@ -3,6 +3,8 @@ import { z } from "zod";
 import { WhatsAppIcon } from "./WhatsAppIcon";
 import { site } from "@/lib/site";
 import { usePublicData } from "@/hooks/usePublicData";
+import { useServerFn } from "@tanstack/react-start";
+import { createInquiryLead } from "@/lib/inquiry.functions";
 
 const INQUIRY_WHATSAPP_NUMBER = "601115526527";
 
@@ -17,9 +19,11 @@ const schema = z.object({
 
 export function InquiryForm() {
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [saved, setSaved] = useState(false);
   const { products: dbProducts } = usePublicData();
+  const saveLead = useServerFn(createInquiryLead);
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
     const fd = new FormData(e.currentTarget);
@@ -36,6 +40,13 @@ export function InquiryForm() {
     }
 
     setErrors({});
+    setSaved(false);
+    try {
+      await saveLead({ data: parsed.data });
+      setSaved(true);
+    } catch (error) {
+      setErrors({ form: error instanceof Error ? error.message : "Could not save your enquiry." });
+    }
 
     const text =
       `*New Inquiry — ${site.name}*\n\n` +
@@ -131,6 +142,8 @@ export function InquiryForm() {
           <WhatsAppIcon className="h-4 w-4" /> Send via WhatsApp
         </button>
         <p className="text-xs text-muted-foreground">We typically respond within 1 business hour.</p>
+        {saved && <p className="text-xs font-semibold text-primary">Your enquiry has been saved. WhatsApp is opening now.</p>}
+        {errors.form && <p className="text-xs text-destructive">{errors.form}</p>}
       </div>
     </form>
   );

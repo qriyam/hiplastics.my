@@ -162,6 +162,7 @@ function ProductDetailPage() {
   const effectivePrice = tierPriceFor(item.price, sortedTiers, qty);
   const loc = localizedProduct(item, lang);
 
+  const offerPrices = [item.price, ...sortedTiers.map((tier) => tier.price)].filter((price) => Number(price) > 0);
   const productJsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -173,7 +174,15 @@ function ProductDetailPage() {
     url: `${SITE_URL}/products/${item.slug}`,
     ...(item.purchasable && item.price > 0
       ? {
-          offers: {
+          offers: offerPrices.length > 1 ? {
+            "@type": "AggregateOffer",
+            priceCurrency: "MYR",
+            lowPrice: Math.min(...offerPrices).toFixed(2),
+            highPrice: Math.max(...offerPrices).toFixed(2),
+            offerCount: offerPrices.length,
+            availability: inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+            url: `${SITE_URL}/products/${item.slug}`,
+          } : {
             "@type": "Offer",
             priceCurrency: "MYR",
             price: item.price.toFixed(2),
@@ -182,6 +191,7 @@ function ProductDetailPage() {
           },
         }
       : {}),
+    ...(item.rating_count && item.rating_count > 0 ? { aggregateRating: { "@type": "AggregateRating", ratingValue: Number(item.rating_average || 0).toFixed(1), reviewCount: item.rating_count } } : {}),
   };
 
   const related = dbProducts

@@ -865,3 +865,27 @@ alter table hiplastics.order_status_audit enable row level security;
 drop policy if exists "admin read order audit" on hiplastics.order_status_audit;
 create policy "admin read order audit" on hiplastics.order_status_audit for select to authenticated
   using (hiplastics.has_role(auth.uid(), 'admin'));
+
+
+-- ---------- B2B inquiry/RFQ leads ----------
+create table if not exists hiplastics.inquiry_leads (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  company text not null,
+  phone text not null,
+  email text not null,
+  interest text not null,
+  message text not null,
+  source text not null default 'website',
+  status text not null default 'new',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists hip_inquiry_leads_created_idx on hiplastics.inquiry_leads (created_at desc);
+create index if not exists hip_inquiry_leads_email_idx on hiplastics.inquiry_leads (email);
+grant all on hiplastics.inquiry_leads to service_role;
+grant select on hiplastics.inquiry_leads to authenticated;
+alter table hiplastics.inquiry_leads enable row level security;
+drop policy if exists "admin read inquiry leads" on hiplastics.inquiry_leads;
+create policy "admin read inquiry leads" on hiplastics.inquiry_leads for select to authenticated
+  using (hiplastics.has_role(auth.uid(), 'admin'));
