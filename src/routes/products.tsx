@@ -27,7 +27,7 @@ export const Route = createFileRoute("/products")({
   component: ProductsPage,
 });
 
-function ProductsPage() {
+export function ProductsPage() {
   const { products: dbProducts, categories: dbCategories } = usePublicData();
   const { q } = Route.useSearch();
 

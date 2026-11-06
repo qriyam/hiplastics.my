@@ -23,7 +23,7 @@ export const Route = createFileRoute("/track")({
   component: TrackPage,
 });
 
-function TrackPage() {
+export function TrackPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const fetchOrder = useServerFn(getOrder);

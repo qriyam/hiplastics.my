@@ -35,3 +35,17 @@ export const adminListInquiryLeads = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { leads: leads ?? [] };
   });
+
+export const adminUpdateInquiryLead = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => z.object({ token: z.string().min(10), id: z.string().uuid(), status: z.enum(["new", "contacted", "quoted", "won", "lost"]) }).parse(input))
+  .handler(async ({ data }) => {
+    const { getAdminClient } = await import("@/integrations/hiplastics/admin.server");
+    const admin = getAdminClient();
+    const { data: user, error: userError } = await admin.auth.getUser(data.token);
+    if (userError || !user.user) throw new Error("Not authenticated");
+    const { data: role } = await admin.from("user_roles").select("role").eq("user_id", user.user.id).eq("role", "admin").maybeSingle();
+    if (!role) throw new Error("Not authorized");
+    const { error } = await admin.from("inquiry_leads").update({ status: data.status, updated_at: new Date().toISOString() }).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  });

@@ -61,7 +61,7 @@ const downloads = [
   { title: "Installation & Care Manual", size: "PDF · 950 KB" },
 ];
 
-function HomePage() {
+export function HomePage() {
   const { products: dbProducts, categories: dbCategories, settings } = usePublicData();
   const catalogue = dbProducts.map((p) => {
     const imgs = (Array.isArray(p.image_urls) ? p.image_urls : []).filter(Boolean);

@@ -169,6 +169,14 @@ export const adminListOrders = createServerFn({ method: "POST" })
     return { orders: r.orders as unknown as OrderRow[], items: r.items as unknown as OrderItemRow[] };
   });
 
+export const retryPayment = createServerFn({ method: "POST" })
+  .inputValidator((d: { orderNo: string; access_token: string }) => z.object({ orderNo: z.string().min(4).max(40), access_token: z.string().min(10).max(100) }).parse(d))
+  .handler(async ({ data }) => {
+    const { retryToyyibPayment } = await import("./shop.server");
+    try { return { ok: true as const, ...(await retryToyyibPayment(data.orderNo, data.access_token)) }; }
+    catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Could not restart payment." }; }
+  });
+
 /** Public: "Notify me when back in stock" — shown on out-of-stock products. */
 export const requestStockNotify = createServerFn({ method: "POST" })
   .inputValidator((d: { slug: string; email: string }) =>

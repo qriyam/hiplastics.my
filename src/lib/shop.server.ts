@@ -458,6 +458,23 @@ async function createToyyibBill(a: {
   return { billCode, url: `${cfg.host}/${billCode}` };
 }
 
+export async function retryToyyibPayment(orderNo: string, token: string) {
+  const admin = getAdminClient();
+  const { data: order } = await admin.from("orders").select("*").eq("order_no", orderNo).eq("access_token", token).maybeSingle();
+  if (!order) throw new Error("Order not found.");
+  if (order.payment_method !== "toyyibpay" || order.payment_status === "paid") throw new Error("This order does not need another payment.");
+  if (!["failed", "pending"].includes(String(order.payment_status)) && order.status !== "cancelled") throw new Error("This order cannot be paid again.");
+  const { data: itemRows } = await admin.from("order_items").select("slug, qty, name").eq("order_id", order.id);
+  if (!itemRows?.length) throw new Error("This order has no items to pay for.");
+  if (!order.stock_applied) {
+    await reserveStockForOrder(admin, itemRows as { slug: string; qty: number; name: string }[]);
+  }
+  const bill = await createToyyibBill({ orderNo: order.order_no, total: Number(order.total), name: order.customer_name, email: order.customer_email, phone: order.customer_phone, token: order.access_token });
+  const { error } = await admin.from("orders").update({ bill_code: bill.billCode, status: "new", payment_status: "pending", stock_applied: true, updated_at: new Date().toISOString() }).eq("id", order.id);
+  if (error) throw new Error(error.message);
+  return { paymentUrl: bill.url, orderNo: order.order_no };
+}
+
 /** Ask ToyyibPay for the authoritative status of a bill. */
 export async function syncBillStatus(orderNo: string) {
   const admin = getAdminClient();
@@ -626,12 +643,14 @@ export async function loadOrder(orderNo: string, opts: { token?: string; email?:
 
 export async function listOrders() {
   const admin = getAdminClient();
-  const { data: orders } = await admin
-    .from("orders")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(300);
-  const ids = (orders ?? []).map((o) => o.id);
+  const orders: Record<string, unknown>[] = [];
+  for (let offset = 0; ; offset += 300) {
+    const { data: page, error } = await admin.from("orders").select("*").order("created_at", { ascending: false }).range(offset, offset + 299);
+    if (error) throw new Error(error.message);
+    orders.push(...((page ?? []) as Record<string, unknown>[]));
+    if (!page || page.length < 300) break;
+  }
+  const ids = orders.map((o) => o.id);
   const { data: items } = ids.length
     ? await admin.from("order_items").select("*").in("order_id", ids)
     : { data: [] as unknown[] };

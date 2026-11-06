@@ -27,7 +27,7 @@ import {
 } from "@/lib/cms.functions";
 import { parseCsv, toCsv, downloadCsv } from "@/lib/csv";
 import { getAdminAnalytics, type AdminAnalytics } from "@/lib/analytics.functions";
-import { adminListInquiryLeads } from "@/lib/inquiry.functions";
+import { adminListInquiryLeads, adminUpdateInquiryLead } from "@/lib/inquiry.functions";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -572,7 +572,7 @@ function Dashboard({ session, onSignOut }: { session: Session; onSignOut: () => 
 
           {tab === "analytics" && <AnalyticsPanel data={analytics} />}
 
-          {tab === "rfq" && <RfqLeadsPanel leads={rfqLeads} />}
+          {tab === "rfq" && <RfqLeadsPanel token={session.token} leads={rfqLeads} onChanged={refresh} />}
 
           {data && (["products", "categories", "industries", "gallery", "downloads", "news", "coupons", "reviews"] as CrudKey[]).includes(tab as CrudKey) && (
             <CrudTable
@@ -627,10 +627,17 @@ function Dashboard({ session, onSignOut }: { session: Session; onSignOut: () => 
   );
 }
 
-function RfqLeadsPanel({ leads }: { leads: Record<string, unknown>[] }) {
+function RfqLeadsPanel({ token, leads, onChanged }: { token: string; leads: Record<string, unknown>[]; onChanged: () => void | Promise<void> }) {
+  const updateLead = useServerFn(adminUpdateInquiryLead);
+  const statuses = ["new", "contacted", "quoted", "won", "lost"] as const;
+  function exportLeads() {
+    const header = ["date", "name", "company", "email", "phone", "interest", "status", "message"];
+    const csv = [header, ...leads.map((l) => header.map((key) => csvEscape(String(key === "date" ? l.created_at ?? "" : l[key] ?? ""))))].map((row) => row.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `hiplastics-rfq-leads-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(a.href);
+  }
   return <div className="space-y-4">
-    <div><h2 className="text-lg font-bold text-foreground">RFQ leads</h2><p className="text-sm text-muted-foreground">Website enquiries are saved here before the customer is handed off to WhatsApp.</p></div>
-    <div className="overflow-x-auto rounded-lg border border-border bg-card"><table className="w-full min-w-[850px] text-left text-sm"><thead className="border-b border-border bg-surface text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="px-4 py-3">Date</th><th className="px-4 py-3">Customer</th><th className="px-4 py-3">Company</th><th className="px-4 py-3">Interest</th><th className="px-4 py-3">Message</th><th className="px-4 py-3">Contact</th></tr></thead><tbody>{leads.map((lead) => <tr key={String(lead.id)} className="border-b border-border last:border-0"><td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">{new Date(String(lead.created_at)).toLocaleString()}</td><td className="px-4 py-3"><div className="font-semibold">{String(lead.name)}</div><div className="text-xs text-muted-foreground">{String(lead.email)}</div></td><td className="px-4 py-3">{String(lead.company)}</td><td className="px-4 py-3">{String(lead.interest)}</td><td className="max-w-sm px-4 py-3 text-xs text-muted-foreground">{String(lead.message)}</td><td className="px-4 py-3"><a className="text-xs font-semibold text-primary hover:underline" href={`mailto:${encodeURIComponent(String(lead.email))}`}>Email</a><br /><a className="text-xs font-semibold text-primary hover:underline" href={`tel:${encodeURIComponent(String(lead.phone))}`}>{String(lead.phone)}</a></td></tr>)}{leads.length === 0 && <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">No RFQ leads yet.</td></tr>}</tbody></table></div>
+    <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-bold text-foreground">RFQ leads</h2><p className="text-sm text-muted-foreground">Website enquiries are saved here before the customer is handed off to WhatsApp.</p></div><button onClick={exportLeads} className="rounded-md border border-border px-3 py-2 text-xs font-semibold hover:bg-secondary">Export CSV</button></div>
+    <div className="overflow-x-auto rounded-lg border border-border bg-card"><table className="w-full min-w-[950px] text-left text-sm"><thead className="border-b border-border bg-surface text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="px-4 py-3">Date</th><th className="px-4 py-3">Customer</th><th className="px-4 py-3">Company</th><th className="px-4 py-3">Interest</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Message</th><th className="px-4 py-3">Contact</th></tr></thead><tbody>{leads.map((lead) => <tr key={String(lead.id)} className="border-b border-border last:border-0"><td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">{new Date(String(lead.created_at)).toLocaleString()}</td><td className="px-4 py-3"><div className="font-semibold">{String(lead.name)}</div><div className="text-xs text-muted-foreground">{String(lead.email)}</div></td><td className="px-4 py-3">{String(lead.company)}</td><td className="px-4 py-3">{String(lead.interest)}</td><td className="px-4 py-3"><select value={String(lead.status || "new")} onChange={async (e) => { await updateLead({ data: { token, id: String(lead.id), status: e.target.value as typeof statuses[number] } }); await onChanged(); }} className="rounded border border-input bg-background px-2 py-1 text-xs">{statuses.map((s) => <option key={s} value={s}>{s}</option>)}</select></td><td className="max-w-sm px-4 py-3 text-xs text-muted-foreground">{String(lead.message)}</td><td className="px-4 py-3"><a className="text-xs font-semibold text-primary hover:underline" href={`mailto:${encodeURIComponent(String(lead.email))}`}>Email</a><br /><a className="text-xs font-semibold text-primary hover:underline" href={`tel:${encodeURIComponent(String(lead.phone))}`}>{String(lead.phone)}</a></td></tr>)}{leads.length === 0 && <tr><td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">No RFQ leads yet.</td></tr>}</tbody></table></div>
   </div>;
 }
 

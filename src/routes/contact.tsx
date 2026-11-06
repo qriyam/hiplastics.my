@@ -40,7 +40,7 @@ export const Route = createFileRoute("/contact")({
   component: ContactPage,
 });
 
-function ContactPage() {
+export function ContactPage() {
   const { settings } = usePublicData();
   const phoneDigits = (settings.phone || "").replace(/\D/g, "");
 

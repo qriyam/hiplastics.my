@@ -6,7 +6,7 @@ import { LogOut, Loader2, Package, CheckCircle2, XCircle, Clock, Star } from "lu
 import { SiteLayout } from "@/components/SiteLayout";
 import { RatingStars } from "@/components/RatingStars";
 import { useAuth } from "@/lib/auth";
-import { myOrders, type OrderRow } from "@/lib/shop.functions";
+import { myOrders, retryPayment, type OrderRow } from "@/lib/shop.functions";
 import { myReviews, updateReview } from "@/lib/reviews.functions";
 import { money } from "@/lib/cart";
 import { site } from "@/lib/site";
@@ -47,9 +47,11 @@ function AccountPage() {
   const { user, session, loading, signOut } = useAuth();
   const navigate = useNavigate();
   const fetchMyOrders = useServerFn(myOrders);
+  const retry = useServerFn(retryPayment);
   const [orders, setOrders] = useState<OrderRow[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [tab, setTab] = useState<"orders" | "reviews">("orders");
+  const [retrying, setRetrying] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login", search: { redirect: "/account" } });
@@ -140,14 +142,11 @@ function AccountPage() {
               {orders && orders.length > 0 && (
                 <div className="mt-5 space-y-3">
                   {orders.map((o) => (
-                    <Link
+                    <div
                       key={o.id}
-                      to="/order/$orderNo"
-                      params={{ orderNo: o.order_no }}
-                      search={{ t: o.access_token }}
                       className="block rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary/40"
                     >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
+                      <Link to="/order/$orderNo" params={{ orderNo: o.order_no }} search={{ t: o.access_token }} className="flex flex-wrap items-center justify-between gap-2">
                         <div>
                           <div className="font-semibold text-foreground">{o.order_no}</div>
                           <div className="text-xs text-muted-foreground">{new Date(o.created_at).toLocaleString()}</div>
@@ -156,8 +155,9 @@ function AccountPage() {
                           <StatusBadge order={o} />
                           <div className="font-bold text-foreground">{money(o.total, o.currency)}</div>
                         </div>
-                      </div>
-                    </Link>
+                      </Link>
+                      {(o.payment_status === "failed" || o.status === "cancelled") && o.payment_method === "toyyibpay" && <button type="button" disabled={retrying === o.id} onClick={async () => { setRetrying(o.id); const res = await retry({ data: { orderNo: o.order_no, access_token: o.access_token } }); setRetrying(null); if (res.ok) window.location.assign(res.paymentUrl); else setErr(res.error); }} className="mt-3 inline-flex rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60">{retrying === o.id ? "Opening payment…" : "Pay again"}</button>}
+                    </div>
                   ))}
                 </div>
               )}
