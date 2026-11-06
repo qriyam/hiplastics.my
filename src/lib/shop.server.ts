@@ -470,7 +470,7 @@ export async function syncBillStatus(orderNo: string) {
   const res = await fetch(`${cfg.host}/index.php/api/getBillTransactions`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ billCode: order.bill_code, billpaymentStatus: "1" }),
+    body: new URLSearchParams({ billCode: order.bill_code }),
   });
   const text = await res.text();
   let rows: Array<{ billpaymentStatus?: string | number; billpaymentInvoiceNo?: string; billpaymentAmount?: string | number; transaction_id?: string }> = [];
@@ -479,7 +479,7 @@ export async function syncBillStatus(orderNo: string) {
   } catch {
     return order;
   }
-  const paid = Array.isArray(rows) && rows.find((r) => String(r.billpaymentStatus) === "1");
+  const paid = Array.isArray(rows) && rows.find((r) => isSuccessfulToyyibStatus(r.billpaymentStatus));
   if (!paid) return order;
   if (!paymentAmountMatches(paid.billpaymentAmount, Number(order.total))) return order;
   const wasCancelled = order.status === "cancelled";
@@ -554,13 +554,13 @@ export async function applyCallback(p: {
       const res = await fetch(`${cfg.host}/index.php/api/getBillTransactions`, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ billCode: order.bill_code, billpaymentStatus: "1" }),
+        body: new URLSearchParams({ billCode: order.bill_code }),
       });
       rows = JSON.parse(await res.text());
     } catch {
       return { ok: false, reason: "gateway_verification_failed" };
     }
-    verifiedPaid = Array.isArray(rows) && rows.find((r) => String(r.billpaymentStatus) === "1");
+    verifiedPaid = Array.isArray(rows) && rows.find((r) => isSuccessfulToyyibStatus(r.billpaymentStatus));
   }
   if (!verifiedPaid) return { ok: true, paid: false };
   if (!paymentAmountMatches(verifiedPaid.billpaymentAmount, Number(order.total))) return { ok: false, reason: "amount_mismatch" };
@@ -600,6 +600,11 @@ function paymentAmountMatches(raw: string | number | undefined, expected: number
   const amount = Number(raw);
   if (!Number.isFinite(amount) || !Number.isFinite(expected)) return false;
   return Math.abs(amount - expected) < 0.01 || Math.abs(amount / 100 - expected) < 0.01;
+}
+
+function isSuccessfulToyyibStatus(raw: string | number | undefined) {
+  const value = String(raw ?? "").trim().toLowerCase();
+  return value === "1" || value === "success" || value === "successful" || value === "paid" || value === "completed";
 }
 
 

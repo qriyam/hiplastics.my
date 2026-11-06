@@ -72,7 +72,7 @@ function OrderPage() {
 
   if (!order) {
     return (
-      <SiteLayout>
+      <SiteLayout showContact={false}>
         <section className="section-pad">
           <div className="container-page mx-auto max-w-md">
             <h1 className="text-2xl font-bold text-foreground">Track order {orderNo}</h1>
@@ -161,181 +161,60 @@ function OrderPage() {
             </div>
           )}
 
-          {/* Printable invoice */}
+          {/* Compact printable invoice */}
           <div
             id="invoice"
             style={settings.invoice_accent_color ? ({ "--invoice-accent": settings.invoice_accent_color } as React.CSSProperties) : undefined}
-            className="relative mt-6 overflow-hidden rounded-xl border border-border bg-white shadow-sm print:mt-0 print:shadow-none"
+            className="relative mt-6 overflow-hidden bg-white text-black print:mt-0 print:shadow-none"
           >
-            {/* Header band */}
-            <div className="invoice-print-block flex flex-wrap items-start justify-between gap-4 bg-gradient-to-r from-[var(--invoice-accent,var(--color-primary))]/5 to-transparent p-6">
-              <div className="flex items-center gap-3">
-                {settings.logo_url ? (
-                  <img src={settings.logo_url} alt={settings.name || site.name} className="h-14 w-14 shrink-0 rounded-lg border border-border/60 bg-white object-contain p-1.5" />
-                ) : (
-                  <div className="grid h-14 w-14 shrink-0 place-items-center rounded-lg bg-[var(--invoice-accent,var(--color-primary))] text-2xl font-extrabold text-white">
-                    {(settings.name || site.name).slice(0, 1)}
-                  </div>
-                )}
-                <div>
-                  <div className="text-xl font-extrabold leading-tight text-[var(--invoice-accent,var(--color-primary))]">{settings.name || site.name}</div>
-                  <div className="text-xs text-muted-foreground">{settings.address || site.address}</div>
-                  <div className="text-xs text-muted-foreground">{settings.email || site.email} · {settings.phone || site.phone}</div>
+            <div className="invoice-print-block flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+              <div className="flex min-w-0 items-center gap-3">
+                {settings.logo_url ? <img src={settings.logo_url} alt={settings.name || site.name} className="h-11 w-11 shrink-0 object-contain" /> : <div className="grid h-11 w-11 shrink-0 place-items-center bg-slate-100 text-lg font-bold">{(settings.name || site.name).slice(0, 1)}</div>}
+                <div className="min-w-0 text-[10px] leading-4 text-slate-500">
+                  <div className="text-sm font-bold text-black">{settings.name || site.name}</div>
+                  <div>{settings.address || site.address}</div>
+                  <div>{settings.email || site.email} · {settings.phone || site.phone}</div>
                 </div>
               </div>
-              <div className="text-right">
-                <div className="text-2xl font-extrabold tracking-tight text-foreground">INVOICE</div>
-                <div className="mt-1 font-mono text-sm font-semibold text-muted-foreground">{order.order_no}</div>
-                <div className="text-xs text-muted-foreground">Date: {new Date(order.created_at).toLocaleDateString()}</div>
+              <div className="shrink-0 text-right">
+                <div className="text-2xl font-bold tracking-tight text-black">INVOICE</div>
+                <div className="font-mono text-[10px] font-semibold text-slate-600">{order.order_no}</div>
+                <div className="text-[10px] text-slate-500">Date: {new Date(order.created_at).toLocaleDateString()}</div>
               </div>
             </div>
 
-            {stampLabel && (
-              <div
-                className={`pointer-events-none absolute right-8 top-24 -rotate-12 select-none rounded border-4 px-4 py-1 text-2xl font-extrabold uppercase tracking-widest opacity-25 ${
-                  isCancelled ? "border-destructive text-destructive" : "border-[var(--invoice-accent,var(--color-primary))] text-[var(--invoice-accent,var(--color-primary))]"
-                }`}
-              >
-                {stampLabel}
-              </div>
-            )}
-
-            {/* Status banner */}
-            <div className={`invoice-print-block mx-6 flex items-center gap-2 rounded-lg border p-3 text-sm font-semibold ${isCancelled ? "border-destructive/30 bg-destructive/5 text-destructive" : paid || cod ? "border-[var(--invoice-accent,var(--color-primary))]/30 bg-[var(--invoice-accent,var(--color-primary))]/5 text-[var(--invoice-accent,var(--color-primary))]" : "border-border bg-secondary text-muted-foreground"}`}>
+            <div className={`invoice-print-block mx-5 mt-3 flex items-center gap-2 border-b pb-2 text-xs font-semibold ${isCancelled ? "border-red-200 text-red-700" : paid || cod ? "border-emerald-200 text-emerald-700" : "border-amber-200 text-amber-700"}`}>
               {isCancelled ? <XCircle className="h-4 w-4 shrink-0" /> : paid || cod ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <Clock className="h-4 w-4 shrink-0" />}
-              {isCancelled ? (order.payment_status === "refunded" ? "Order Refunded" : "Order Cancelled") : paid ? "Payment Successful — Order Confirmed" : cod ? "Order Confirmed — Cash on Delivery" : `Payment ${order.payment_status}`}
+              {isCancelled ? (order.payment_status === "refunded" ? "Order refunded" : "Order cancelled") : paid ? "Payment successful — order confirmed" : cod ? "Order confirmed — cash on delivery" : "Payment is being verified"}
             </div>
 
-            {/* Delivery timeline — always present so the first invoice clearly shows the current order state. */}
-            <div className={`invoice-print-block mx-6 mt-4 rounded-lg border p-4 ${isCancelled ? "border-destructive/30 bg-destructive/5" : "border-border bg-surface/40"}`}>
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div className={`text-xs font-bold uppercase tracking-wide ${isCancelled ? "text-destructive" : "text-[var(--invoice-accent,var(--color-primary))]"}`}>{isCancelled ? "Order status update" : "Order tracking update"}</div>
-                  <div className={`rounded-full px-2.5 py-1 text-[11px] font-bold uppercase ${isCancelled ? "bg-destructive/10 text-destructive" : "bg-secondary text-foreground"}`}>{isCancelled ? (order.payment_status === "refunded" ? "Refunded" : "Cancelled") : order.status}</div>
-                </div>
-                {isCancelled ? (
-                  <div className="flex items-center gap-2 rounded-md border border-destructive/20 bg-background/60 px-3 py-3 text-sm font-semibold text-destructive">
-                    <XCircle className="h-5 w-5 shrink-0" />
-                    <span>{order.payment_status === "refunded" ? "This order has been refunded and will not be delivered." : "This order was cancelled and will not be delivered."}</span>
-                  </div>
-                ) : <div className="flex items-center justify-between text-xs">
-                  {deliverySteps.map((step, idx) => {
-                    const done = rankOf(order.status) >= rankOf(step.key) || order.status === "completed";
-                    const lineFilled = done && rankOf(order.status) > rankOf(step.key);
-                    return (
-                      <div key={step.key} className="flex flex-1 items-center">
-                        <div className="flex flex-col items-center gap-1.5">
-                          <div
-                            className="grid h-8 w-8 shrink-0 place-items-center rounded-full border-2"
-                            style={
-                              done
-                                ? { borderColor: accentColor, backgroundColor: accentColor, color: "#fff" }
-                                : { borderColor: "var(--color-border)", color: "var(--color-muted-foreground)" }
-                            }
-                          >
-                            <StepIcon stepKey={step.key} className="h-4 w-4" />
-                          </div>
-                          <span className={done ? "font-semibold text-foreground" : "text-muted-foreground"}>{step.label}</span>
-                        </div>
-                        {idx < deliverySteps.length - 1 && (
-                          <div
-                            className="mx-2 mt-[-18px] h-0.5 flex-1"
-                            style={lineFilled ? { backgroundColor: accentColor } : { borderTop: "2px dashed var(--color-border)" }}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>}
-                {(order.courier || order.tracking_number) && (
-                  <p className="mt-4 text-sm text-foreground">
-                    {order.courier} {order.tracking_number && <>· Tracking <strong>{order.tracking_number}</strong></>}
-                    {order.tracking_url && (
-                      <>
-                        {" "}·{" "}
-                        <a href={order.tracking_url} target="_blank" rel="noopener noreferrer" className="font-semibold text-[var(--invoice-accent,var(--color-primary))] underline">
-                          Track parcel
-                        </a>
-                      </>
-                    )}
-                  </p>
-                )}
-                {order.delivery_note && <p className="mt-1 text-xs text-muted-foreground">{order.delivery_note}</p>}
+            <div className={`invoice-print-block mx-5 mt-3 border-b pb-3 ${isCancelled ? "border-red-200" : "border-slate-200"}`}>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div className={`text-[10px] font-bold uppercase tracking-wide ${isCancelled ? "text-red-700" : "text-slate-700"}`}>{isCancelled ? "Order status" : "Order tracking update"}</div>
+                <div className="text-[10px] font-bold uppercase text-slate-700">{isCancelled ? (order.payment_status === "refunded" ? "Refunded" : "Cancelled") : order.status}</div>
               </div>
-
-            <div className="invoice-print-block p-6">
-              <div className="grid gap-4 border-b border-border pb-4 text-sm sm:grid-cols-2">
-                <div>
-                  <div className="text-xs font-bold uppercase tracking-wide text-[var(--invoice-accent,var(--color-primary))]">From (Seller)</div>
-                  <div className="mt-1 font-semibold text-foreground">{settings.name || site.name}</div>
-                  <div className="text-muted-foreground">{settings.address || site.address}</div>
-                  <div className="text-muted-foreground">{settings.email || site.email} · {settings.phone || site.phone}</div>
-                </div>
-                <div className="sm:text-right">
-                  <div className="text-xs font-bold uppercase tracking-wide text-[var(--invoice-accent,var(--color-primary))]">Invoice Details</div>
-                  <div className="mt-1 text-muted-foreground">Invoice No. <span className="font-semibold text-foreground">{order.order_no}</span></div>
-                  <div className="text-muted-foreground">Payment Status <span className="font-semibold uppercase text-foreground">{order.payment_status}</span></div>
-                  <div className="text-muted-foreground">Fulfillment <span className="font-semibold capitalize text-foreground">{order.status}</span></div>
-                </div>
-              </div>
-
-              <div className="grid gap-4 border-b border-border py-4 text-sm sm:grid-cols-2">
-                <div>
-                  <div className="text-xs font-bold uppercase tracking-wide text-[var(--invoice-accent,var(--color-primary))]">Bill To</div>
-                  <div className="mt-1 font-semibold text-foreground">{order.customer_name}</div>
-                  {order.company && <div className="text-muted-foreground">{order.company}</div>}
-                  <div className="text-muted-foreground">{order.address1}{order.address2 ? `, ${order.address2}` : ""}</div>
-                  <div className="text-muted-foreground">{order.postcode} {order.city}, {order.state}</div>
-                  <div className="text-muted-foreground">{order.customer_phone} · {order.customer_email}</div>
-                </div>
-                <div className="sm:text-right">
-                  <div className="text-xs font-bold uppercase tracking-wide text-[var(--invoice-accent,var(--color-primary))]">Payment Method</div>
-                  <div className="mt-1 text-foreground">{cod ? "Cash on delivery" : "Online (FPX / DuitNow QR)"}</div>
-                  {order.transaction_id && <div className="text-muted-foreground">Ref: {order.transaction_id}</div>}
-                </div>
-              </div>
-
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-[var(--invoice-accent,var(--color-primary))]/10 text-left text-xs font-bold uppercase tracking-wide text-[var(--invoice-accent,var(--color-primary))]">
-                    <th className="rounded-l-md py-2 pl-2">Item</th><th className="py-2 text-center">Qty</th><th className="py-2 text-right">Unit Price</th><th className="rounded-r-md py-2 pr-2 text-right">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((i) => (
-                    <tr key={i.id} className="border-b border-border">
-                      <td className="py-2.5 pl-2 text-foreground">{i.name}</td>
-                      <td className="py-2.5 text-center">{i.qty}</td>
-                      <td className="py-2.5 text-right">{money(i.unit_price, cur)}</td>
-                      <td className="py-2.5 pr-2 text-right font-semibold">{money(i.line_total, cur)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              <dl className="ml-auto mt-4 w-full max-w-xs space-y-1.5 text-sm">
-                <div className="flex justify-between"><dt className="text-muted-foreground">Subtotal</dt><dd>{money(order.subtotal, cur)}</dd></div>
-                {Number((order as unknown as { discount?: number }).discount ?? 0) > 0 && (
-                  <div className="flex justify-between text-[var(--invoice-accent,var(--color-primary))]">
-                    <dt>
-                      Discount
-                      {(order as unknown as { coupon_code?: string }).coupon_code ? ` (${(order as unknown as { coupon_code?: string }).coupon_code})` : ""}
-                    </dt>
-                    <dd>−{money((order as unknown as { discount?: number }).discount ?? 0, cur)}</dd>
-                  </div>
-                )}
-                <div className="flex justify-between"><dt className="text-muted-foreground">Shipping</dt><dd>{money(order.shipping, cur)}</dd></div>
-                <div className="flex justify-between"><dt className="text-muted-foreground">SST</dt><dd>{money(order.tax, cur)}</dd></div>
-                <div className="flex justify-between border-t-2 border-[var(--invoice-accent,var(--color-primary))]/20 pt-2 text-base font-extrabold"><dt>Total</dt><dd className="text-[var(--invoice-accent,var(--color-primary))]">{money(order.total, cur)}</dd></div>
-              </dl>
+              {isCancelled ? <div className="text-xs font-semibold text-red-700">{order.payment_status === "refunded" ? "This order has been refunded and will not be delivered." : "This order was cancelled and will not be delivered."}</div> : <div className="flex items-start justify-between text-[9px]">
+                {deliverySteps.map((step, idx) => { const done = rankOf(order.status) >= rankOf(step.key) || order.status === "completed"; const lineFilled = done && rankOf(order.status) > rankOf(step.key); return <div key={step.key} className="flex flex-1 items-start"><div className="flex min-w-0 flex-col items-center gap-1 text-center"><div className="grid h-6 w-6 place-items-center rounded-full border" style={done ? { borderColor: accentColor, backgroundColor: accentColor, color: "#fff" } : { borderColor: "#cbd5e1", color: "#94a3b8" }}><StepIcon stepKey={step.key} className="h-3 w-3" /></div><span className={done ? "font-semibold text-black" : "text-slate-400"}>{step.label}</span></div>{idx < deliverySteps.length - 1 && <div className="mx-1 mt-3 h-px flex-1" style={lineFilled ? { backgroundColor: accentColor } : { backgroundColor: "#cbd5e1" }} />}</div>; })}
+              </div>}
+              {(order.courier || order.tracking_number) && <p className="mt-2 text-[10px] text-slate-600">{order.courier} {order.tracking_number && <>· Tracking <strong>{order.tracking_number}</strong></>}{order.tracking_url && <> · <a href={order.tracking_url} target="_blank" rel="noopener noreferrer" className="font-semibold underline">Track parcel</a></>}</p>}
+              {order.delivery_note && <p className="mt-1 text-[10px] text-slate-500">{order.delivery_note}</p>}
             </div>
 
-            <div className="invoice-print-block flex flex-wrap items-center justify-between gap-3 border-t border-border bg-surface px-6 py-4 text-xs text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 shrink-0 text-[var(--invoice-accent,var(--color-primary))]" />
-                <span>{settings.invoice_footer_note || "Thank you for your purchase! If you have any questions, feel free to contact us."}</span>
-              </div>
-              <span className="italic text-[var(--invoice-accent,var(--color-primary))]">Best regards, {settings.invoice_signature_name || `${site.name} Team`}</span>
+            <div className="invoice-print-block grid grid-cols-2 gap-5 border-b border-slate-200 px-5 py-3 text-[10px] leading-4">
+              <div><div className="font-bold uppercase tracking-wide text-slate-700">From (Seller)</div><div className="mt-1 font-semibold text-black">{settings.name || site.name}</div><div className="text-slate-500">{settings.address || site.address}</div><div className="text-slate-500">{settings.email || site.email} · {settings.phone || site.phone}</div></div>
+              <div className="text-right"><div className="font-bold uppercase tracking-wide text-slate-700">Invoice Details</div><div className="mt-1 text-slate-500">Invoice No. <span className="font-semibold text-black">{order.order_no}</span></div><div className="text-slate-500">Payment <span className="font-semibold uppercase text-black">{order.payment_status}</span></div><div className="text-slate-500">Fulfillment <span className="font-semibold capitalize text-black">{order.status}</span></div></div>
             </div>
+
+            <div className="invoice-print-block grid grid-cols-2 gap-5 border-b border-slate-200 px-5 py-3 text-[10px] leading-4">
+              <div><div className="font-bold uppercase tracking-wide text-slate-700">Bill To</div><div className="mt-1 font-semibold text-black">{order.customer_name}</div>{order.company && <div className="text-slate-500">{order.company}</div>}<div className="text-slate-500">{order.address1}{order.address2 ? `, ${order.address2}` : ""}</div><div className="text-slate-500">{order.postcode} {order.city}, {order.state}</div><div className="text-slate-500">{order.customer_phone} · {order.customer_email}</div></div>
+              <div className="text-right"><div className="font-bold uppercase tracking-wide text-slate-700">Payment Method</div><div className="mt-1 text-black">{cod ? "Cash on delivery" : "Online (FPX / DuitNow QR)"}</div>{order.transaction_id && <div className="text-slate-500">Ref: {order.transaction_id}</div>}</div>
+            </div>
+
+            <div className="invoice-print-block px-5 py-3">
+              <table className="w-full table-fixed text-[10px]"><thead><tr className="border-b border-slate-300 text-left font-bold uppercase tracking-wide text-slate-700"><th className="w-[58%] py-1.5">Item</th><th className="w-[10%] py-1.5 text-center">Qty</th><th className="w-[16%] py-1.5 text-right">Unit</th><th className="w-[16%] py-1.5 text-right">Total</th></tr></thead><tbody>{items.map((i) => <tr key={i.id} className="border-b border-slate-200"><td className="break-words py-2 pr-2 text-black">{i.name}</td><td className="py-2 text-center">{i.qty}</td><td className="py-2 text-right">{money(i.unit_price, cur)}</td><td className="py-2 text-right font-semibold">{money(i.line_total, cur)}</td></tr>)}</tbody></table>
+              <dl className="ml-auto mt-3 w-56 space-y-1 text-[10px]"><div className="flex justify-between"><dt className="text-slate-500">Subtotal</dt><dd>{money(order.subtotal, cur)}</dd></div>{Number((order as unknown as { discount?: number }).discount ?? 0) > 0 && <div className="flex justify-between text-slate-700"><dt>Discount</dt><dd>−{money((order as unknown as { discount?: number }).discount ?? 0, cur)}</dd></div>}<div className="flex justify-between"><dt className="text-slate-500">Shipping</dt><dd>{money(order.shipping, cur)}</dd></div><div className="flex justify-between"><dt className="text-slate-500">SST</dt><dd>{money(order.tax, cur)}</dd></div><div className="flex justify-between border-t border-slate-300 pt-1.5 text-sm font-bold"><dt>Total</dt><dd>{money(order.total, cur)}</dd></div></dl>
+            </div>
+            <div className="invoice-print-block flex items-center justify-between gap-3 border-t border-slate-200 px-5 py-3 text-[9px] text-slate-500"><span>{settings.invoice_footer_note || "Thank you for your purchase."}</span><span className="italic">Best regards, {settings.invoice_signature_name || `${site.name} Team`}</span></div>
           </div>
 
           <div className="mt-5 flex flex-wrap gap-3 print:hidden">
