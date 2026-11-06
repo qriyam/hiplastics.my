@@ -27,6 +27,7 @@ import {
 } from "@/lib/cms.functions";
 import { parseCsv, toCsv, downloadCsv } from "@/lib/csv";
 import { getAdminAnalytics, type AdminAnalytics } from "@/lib/analytics.functions";
+import { adminListInquiryLeads } from "@/lib/inquiry.functions";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -61,6 +62,7 @@ const NAV = [
   { key: "deliveries", label: "Deliveries", icon: Truck, group: "Sales" },
   { key: "customers", label: "Customers", icon: Users, group: "Sales" },
   { key: "analytics", label: "Visitors & Leads", icon: BarChart3, group: "Sales" },
+  { key: "rfq", label: "RFQ Leads", icon: Mail, group: "Sales" },
   { key: "products", label: "Products", icon: Package, group: "Catalogue" },
   { key: "categories", label: "Categories", icon: Tags, group: "Catalogue" },
   { key: "industries", label: "Industries", icon: Factory, group: "Catalogue" },
@@ -418,6 +420,7 @@ function Dashboard({ session, onSignOut }: { session: Session; onSignOut: () => 
   const upload = useServerFn(uploadMedia);
   const listOrdersFn = useServerFn(adminListOrders);
   const loadAnalytics = useServerFn(getAdminAnalytics);
+  const loadRfqLeads = useServerFn(adminListInquiryLeads);
   const confirmDialog = useConfirm();
   const [tab, setTab] = useState<TabKey>("dashboard");
   const [navOpen, setNavOpen] = useState(false);
@@ -428,6 +431,7 @@ function Dashboard({ session, onSignOut }: { session: Session; onSignOut: () => 
   const [busy, setBusy] = useState(false);
   const [importBusy, setImportBusy] = useState(false);
   const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
+  const [rfqLeads, setRfqLeads] = useState<Record<string, unknown>[]>([]);
 
   useEffect(() => {
     if (!navOpen) return;
@@ -439,15 +443,17 @@ function Dashboard({ session, onSignOut }: { session: Session; onSignOut: () => 
   async function refresh() {
     setBusy(true); setErr(null);
     try {
-      const [cms, ord, stats] = await Promise.all([
+      const [cms, ord, stats, leads] = await Promise.all([
         load({ data: { token: session.token } }),
         listOrdersFn({ data: { token: session.token } }).catch(() => ({ orders: [], items: [] })),
         loadAnalytics({ data: { token: session.token } }).catch(() => null),
+        loadRfqLeads({ data: { token: session.token } }).catch(() => ({ leads: [] })),
       ]);
       setData(cms);
       setOrders(ord.orders as OrderRow[]);
       setOrderItems(ord.items as OrderItemRow[]);
       if (stats) setAnalytics(stats);
+      setRfqLeads((leads as { leads?: Record<string, unknown>[] }).leads ?? []);
     } catch (e) { setErr(e instanceof Error ? e.message : "Load failed"); }
     setBusy(false);
   }
@@ -566,6 +572,8 @@ function Dashboard({ session, onSignOut }: { session: Session; onSignOut: () => 
 
           {tab === "analytics" && <AnalyticsPanel data={analytics} />}
 
+          {tab === "rfq" && <RfqLeadsPanel leads={rfqLeads} />}
+
           {data && (["products", "categories", "industries", "gallery", "downloads", "news", "coupons", "reviews"] as CrudKey[]).includes(tab as CrudKey) && (
             <CrudTable
               tab={tab as CrudKey}
@@ -617,6 +625,13 @@ function Dashboard({ session, onSignOut }: { session: Session; onSignOut: () => 
       </div>
     </div>
   );
+}
+
+function RfqLeadsPanel({ leads }: { leads: Record<string, unknown>[] }) {
+  return <div className="space-y-4">
+    <div><h2 className="text-lg font-bold text-foreground">RFQ leads</h2><p className="text-sm text-muted-foreground">Website enquiries are saved here before the customer is handed off to WhatsApp.</p></div>
+    <div className="overflow-x-auto rounded-lg border border-border bg-card"><table className="w-full min-w-[850px] text-left text-sm"><thead className="border-b border-border bg-surface text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="px-4 py-3">Date</th><th className="px-4 py-3">Customer</th><th className="px-4 py-3">Company</th><th className="px-4 py-3">Interest</th><th className="px-4 py-3">Message</th><th className="px-4 py-3">Contact</th></tr></thead><tbody>{leads.map((lead) => <tr key={String(lead.id)} className="border-b border-border last:border-0"><td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">{new Date(String(lead.created_at)).toLocaleString()}</td><td className="px-4 py-3"><div className="font-semibold">{String(lead.name)}</div><div className="text-xs text-muted-foreground">{String(lead.email)}</div></td><td className="px-4 py-3">{String(lead.company)}</td><td className="px-4 py-3">{String(lead.interest)}</td><td className="max-w-sm px-4 py-3 text-xs text-muted-foreground">{String(lead.message)}</td><td className="px-4 py-3"><a className="text-xs font-semibold text-primary hover:underline" href={`mailto:${encodeURIComponent(String(lead.email))}`}>Email</a><br /><a className="text-xs font-semibold text-primary hover:underline" href={`tel:${encodeURIComponent(String(lead.phone))}`}>{String(lead.phone)}</a></td></tr>)}{leads.length === 0 && <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">No RFQ leads yet.</td></tr>}</tbody></table></div>
+  </div>;
 }
 
 function StatCard({ label, value, hint }: { label: string; value: string; hint?: string }) {

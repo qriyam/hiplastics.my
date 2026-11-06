@@ -21,3 +21,17 @@ export const createInquiryLead = createServerFn({ method: "POST" })
     if (error) throw new Error("We could not save your enquiry. Please try again or use WhatsApp directly.");
     return { ok: true as const };
   });
+
+export const adminListInquiryLeads = createServerFn({ method: "POST" })
+  .inputValidator((input: { token: string }) => z.object({ token: z.string().min(10) }).parse(input))
+  .handler(async ({ data }) => {
+    const { getAdminClient } = await import("@/integrations/hiplastics/admin.server");
+    const admin = getAdminClient();
+    const { data: user, error: userError } = await admin.auth.getUser(data.token);
+    if (userError || !user.user) throw new Error("Not authenticated");
+    const { data: role } = await admin.from("user_roles").select("role").eq("user_id", user.user.id).eq("role", "admin").maybeSingle();
+    if (!role) throw new Error("Not authorized");
+    const { data: leads, error } = await admin.from("inquiry_leads").select("id, name, company, phone, email, interest, message, status, created_at").order("created_at", { ascending: false }).limit(200);
+    if (error) throw new Error(error.message);
+    return { leads: leads ?? [] };
+  });
