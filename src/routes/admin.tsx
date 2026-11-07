@@ -998,6 +998,15 @@ function OrdersPanel({ token, mode, orders, items, onChanged }: {
     URL.revokeObjectURL(a.href);
   }
 
+  function printPackingSlip(o: OrderRow) {
+    const esc = (v: unknown) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] ?? c));
+    const lineItems = items.filter((i) => i.order_id === o.id).map((i) => `<tr><td>${esc(i.name)}</td><td>${i.qty}</td></tr>`).join("");
+    const w = window.open("", "_blank", "noopener,noreferrer,width=700,height=800");
+    if (!w) { toast.error("Please allow pop-ups to print a packing slip."); return; }
+    w.document.write(`<!doctype html><html><head><title>Packing slip ${esc(o.order_no)}</title><style>body{font:14px Arial,sans-serif;color:#111;padding:32px;max-width:680px;margin:auto}h1{font-size:24px;margin:0 0 4px}h2{font-size:15px;border-bottom:1px solid #ddd;padding-bottom:6px;margin-top:26px}p{line-height:1.5;margin:4px 0}table{width:100%;border-collapse:collapse}td{padding:9px 4px;border-bottom:1px solid #eee}td:last-child{text-align:right;width:60px}@media print{body{padding:0}}</style></head><body><h1>Hiplastics MY</h1><p>Packing slip · ${esc(o.order_no)}</p><h2>Ship to</h2><p><b>${esc(o.customer_name)}</b><br>${esc(o.address1)} ${esc(o.address2)}<br>${esc(o.postcode)} ${esc(o.city)}, ${esc(o.state)}<br>${esc(o.customer_phone)}</p><h2>Items</h2><table>${lineItems}</table>${o.notes ? `<h2>Customer notes</h2><p>${esc(o.notes)}</p>` : ""}<script>window.onload=()=>window.print()<\/script></body></html>`);
+    w.document.close();
+  }
+
   const badge = (t: string) =>
     t === "paid" || t === "completed" || t === "delivered" ? "bg-primary/10 text-primary"
       : t === "failed" || t === "cancelled" ? "bg-destructive/10 text-destructive"
@@ -1102,6 +1111,7 @@ function OrdersPanel({ token, mode, orders, items, onChanged }: {
                 <PaymentStatusPicker status={o.payment_status} onSet={(s) => patch(o.id, { payment_status: s })} disabled={saving === o.id} />
 
                 <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <button type="button" onClick={() => printPackingSlip(o)} className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 font-semibold text-foreground hover:bg-secondary"><PackageCheck className="h-3.5 w-3.5" /> Packing slip</button>
                   <a
                     href={`/order/${o.order_no}?t=${o.access_token}`}
                     target="_blank" rel="noopener noreferrer"

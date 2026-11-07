@@ -1,5 +1,6 @@
 import { RouteError } from "@/components/RouteError";
 import { createFileRoute } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
 import { SiteLayout } from "@/components/SiteLayout";
 import { ProductCard } from "@/components/ProductCard";
 import { site } from "@/lib/site";
@@ -30,6 +31,11 @@ export const Route = createFileRoute("/products")({
 export function ProductsPage() {
   const { products: dbProducts, categories: dbCategories } = usePublicData();
   const { q } = Route.useSearch();
+  const [category, setCategory] = useState("all");
+  const [stockOnly, setStockOnly] = useState(false);
+  const [sort, setSort] = useState<"featured" | "price-low" | "price-high" | "name">("featured");
+  const [page, setPage] = useState(1);
+  const pageSize = 12;
 
   // Only products uploaded from the admin panel are shown
   const allMerged = dbProducts.map((p) => {
@@ -58,16 +64,23 @@ export function ProductsPage() {
 
   // Search filters across name, description, category and SKU.
   const needle = (q ?? "").trim().toLowerCase();
-  const merged = needle
+  const searched = needle
     ? allMerged.filter((p) =>
         [p.name, p.description, p.category, p.sku].some((f) => String(f ?? "").toLowerCase().includes(needle)),
       )
     : allMerged;
 
+  const filtered = useMemo(() => {
+    const result = searched.filter((p) => (category === "all" || p.category === category) && (!stockOnly || p.stock > 0));
+    return [...result].sort((a, b) => sort === "price-low" ? a.price - b.price : sort === "price-high" ? b.price - a.price : sort === "name" ? a.name.localeCompare(b.name) : 0);
+  }, [searched, category, stockOnly, sort]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const visible = filtered.slice((page - 1) * pageSize, page * pageSize);
+
   // Prefer DB category order; append any extra categories found on products
   const orderedCats = dbCategories.map((c) => c.name);
-  const extras = Array.from(new Set(merged.map((p) => p.category))).filter((c) => !orderedCats.includes(c));
-  const categories = [...orderedCats.filter((c) => merged.some((p) => p.category === c)), ...extras];
+  const extras = Array.from(new Set(searched.map((p) => p.category))).filter((c) => !orderedCats.includes(c));
+  const categories = [...orderedCats.filter((c) => searched.some((p) => p.category === c)), ...extras];
 
 
   return (
@@ -80,37 +93,34 @@ export function ProductsPage() {
           </h1>
           <p className="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
             {needle
-              ? `${merged.length} product${merged.length === 1 ? "" : "s"} found.`
+              ? `${filtered.length} product${filtered.length === 1 ? "" : "s"} found.`
               : "Engineered display accessories for supermarkets, pharmacies, and retail chains. Request a quotation for any item below."}
           </p>
         </div>
       </section>
 
-      {needle && merged.length === 0 && (
+      <section className="border-b border-border bg-background">
+        <div className="container-page flex flex-wrap items-center gap-3 py-4">
+          <select value={category} onChange={(e) => { setCategory(e.target.value); setPage(1); }} className="rounded-md border border-input bg-background px-3 py-2 text-sm">
+            <option value="all">All categories</option>{categories.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select value={sort} onChange={(e) => { setSort(e.target.value as typeof sort); setPage(1); }} className="rounded-md border border-input bg-background px-3 py-2 text-sm">
+            <option value="featured">Recommended</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option><option value="name">Name: A–Z</option>
+          </select>
+          <label className="inline-flex items-center gap-2 text-sm text-muted-foreground"><input type="checkbox" checked={stockOnly} onChange={(e) => { setStockOnly(e.target.checked); setPage(1); }} /> In stock only</label>
+          <span className="ml-auto text-xs text-muted-foreground">{filtered.length} products</span>
+        </div>
+      </section>
+
+      {filtered.length === 0 && (
         <section className="section-pad">
           <div className="container-page text-center text-muted-foreground">
-            No products matched "{q}". Try a different search term.
+            No products matched your filters{needle ? ` for "${q}"` : ""}. Try changing the filters.
           </div>
         </section>
       )}
 
-      {categories.map((cat) => (
-        <section key={cat} className="section-pad even:bg-surface">
-          <div className="container-page">
-            <div className="mb-8 flex items-end justify-between">
-              <h2 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{cat}</h2>
-              <span className="text-xs text-muted-foreground">
-                {merged.filter((p) => p.category === cat).length} products
-              </span>
-            </div>
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {merged.filter((p) => p.category === cat).map((p) => (
-                <ProductCard key={p.slug} product={p} />
-              ))}
-            </div>
-          </div>
-        </section>
-      ))}
+      {filtered.length > 0 && <section className="section-pad"><div className="container-page"><div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">{visible.map((p) => <ProductCard key={p.slug} product={p} />)}</div><div className="mt-8 flex items-center justify-center gap-4 text-sm"><button disabled={page <= 1} onClick={() => setPage((n) => Math.max(1, n - 1))} className="rounded-md border border-border px-3 py-2 font-semibold disabled:opacity-40">Previous</button><span className="text-muted-foreground">Page {page} of {pageCount}</span><button disabled={page >= pageCount} onClick={() => setPage((n) => Math.min(pageCount, n + 1))} className="rounded-md border border-border px-3 py-2 font-semibold disabled:opacity-40">Next</button></div></div></section>}
     </SiteLayout>
   );
 }

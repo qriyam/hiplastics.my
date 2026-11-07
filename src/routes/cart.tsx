@@ -36,7 +36,7 @@ const STATES = [
   "Pulau Pinang", "Sabah", "Sarawak", "Selangor", "Terengganu", "Kuala Lumpur", "Labuan", "Putrajaya",
 ];
 
-type Quote = { subtotal: number; shipping: number; tax: number; discount: number; coupon_code?: string; total: number; settings: { currency: string; sst_percent: number; cod_enabled: boolean; online_payment_enabled: boolean } };
+type Quote = { subtotal: number; shipping: number; tax: number; discount: number; coupon_code?: string; total: number; settings: { currency: string; sst_percent: number; cod_enabled: boolean; online_payment_enabled: boolean; free_shipping_over?: number } };
 
 function CartPage() {
   const { items, setQty, remove, clear } = useCart();
@@ -397,6 +397,12 @@ function CartPage() {
             {/* Right: summary */}
             <aside className="h-fit min-w-0 rounded-lg border border-border bg-card p-5 lg:sticky lg:top-24">
               <h2 className="text-base font-bold text-foreground">{t("cart_order_summary")}</h2>
+
+              {q && Number(q.settings.free_shipping_over ?? 0) > 0 && (
+                <div className="mt-3 rounded-md bg-primary/5 p-3 text-xs">
+                  {q.subtotal >= Number(q.settings.free_shipping_over) ? <p className="font-semibold text-primary">You unlocked free shipping.</p> : <><p className="font-semibold text-foreground">Add {money(Number(q.settings.free_shipping_over) - q.subtotal, currency)} more for free shipping.</p><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-border"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, (q.subtotal / Number(q.settings.free_shipping_over)) * 100)}%` }} /></div></>}
+                </div>
+              )}
 
               <div className="mt-4">
                 {appliedCoupon ? (
