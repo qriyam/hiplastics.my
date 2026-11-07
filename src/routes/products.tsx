@@ -35,6 +35,7 @@ export function ProductsPage() {
   const [stockOnly, setStockOnly] = useState(false);
   const [sort, setSort] = useState<"featured" | "price-low" | "price-high" | "name">("featured");
   const [page, setPage] = useState(1);
+  const [compare, setCompare] = useState<string[]>([]);
   const pageSize = 12;
 
   // Only products uploaded from the admin panel are shown
@@ -76,6 +77,21 @@ export function ProductsPage() {
   }, [searched, category, stockOnly, sort]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const visible = filtered.slice((page - 1) * pageSize, page * pageSize);
+
+  function toggleCompare(slug: string) {
+    setCompare((current) => current.includes(slug) ? current.filter((s) => s !== slug) : current.length < 3 ? [...current, slug] : current);
+  }
+
+  function downloadDatasheet(product: (typeof allMerged)[number]) {
+    const lines = [
+      "HIPLASTICS MALAYSIA — PRODUCT DATASHEET", "", `Product: ${product.name}`, `SKU: ${product.sku || "—"}`, `Category: ${product.category}`,
+      `Price: MYR ${product.price.toFixed(2)}`, `Stock: ${product.stock > 0 ? `${product.stock} available` : "Out of stock"}`, "", "DESCRIPTION", product.description || "—", "", "KEY FEATURES", ...product.features.map((f) => `• ${f}`), "", `Generated from ${site.name} catalogue`,
+    ];
+    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${product.slug}-datasheet.txt`; a.click(); URL.revokeObjectURL(a.href);
+  }
+
+  const compareProducts = compare.map((slug) => allMerged.find((p) => p.slug === slug)).filter(Boolean) as typeof allMerged;
 
   // Prefer DB category order; append any extra categories found on products
   const orderedCats = dbCategories.map((c) => c.name);
@@ -120,7 +136,9 @@ export function ProductsPage() {
         </section>
       )}
 
-      {filtered.length > 0 && <section className="section-pad"><div className="container-page"><div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">{visible.map((p) => <ProductCard key={p.slug} product={p} />)}</div><div className="mt-8 flex items-center justify-center gap-4 text-sm"><button disabled={page <= 1} onClick={() => setPage((n) => Math.max(1, n - 1))} className="rounded-md border border-border px-3 py-2 font-semibold disabled:opacity-40">Previous</button><span className="text-muted-foreground">Page {page} of {pageCount}</span><button disabled={page >= pageCount} onClick={() => setPage((n) => Math.min(pageCount, n + 1))} className="rounded-md border border-border px-3 py-2 font-semibold disabled:opacity-40">Next</button></div></div></section>}
+      {filtered.length > 0 && <section className="section-pad"><div className="container-page"><div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">{visible.map((p) => <div key={p.slug} className="relative"><div className="absolute right-3 top-3 z-20 flex gap-1"><button type="button" onClick={() => toggleCompare(p.slug)} className={`rounded-md px-2 py-1 text-[11px] font-bold shadow-sm ${compare.includes(p.slug) ? "bg-primary text-primary-foreground" : "bg-background/95 text-foreground"}`}>{compare.includes(p.slug) ? "In compare" : "Compare"}</button><button type="button" onClick={() => downloadDatasheet(p)} className="rounded-md bg-background/95 px-2 py-1 text-[11px] font-bold text-foreground shadow-sm">Datasheet</button></div><ProductCard product={p} /></div>)}</div><div className="mt-8 flex items-center justify-center gap-4 text-sm"><button disabled={page <= 1} onClick={() => setPage((n) => Math.max(1, n - 1))} className="rounded-md border border-border px-3 py-2 font-semibold disabled:opacity-40">Previous</button><span className="text-muted-foreground">Page {page} of {pageCount}</span><button disabled={page >= pageCount} onClick={() => setPage((n) => Math.min(pageCount, n + 1))} className="rounded-md border border-border px-3 py-2 font-semibold disabled:opacity-40">Next</button></div></div></section>}
+
+      {compareProducts.length > 0 && <section className="border-t border-border bg-surface py-8"><div className="container-page"><div className="flex items-center justify-between gap-3"><div><h2 className="text-xl font-bold text-foreground">Compare products</h2><p className="text-xs text-muted-foreground">Select up to 3 products.</p></div><button type="button" onClick={() => setCompare([])} className="text-xs font-semibold text-muted-foreground underline">Clear</button></div><div className="mt-4 overflow-x-auto"><table className="w-full min-w-[620px] border-collapse text-sm"><tbody>{(["name", "category", "sku", "price", "stock"] as const).map((field) => <tr key={field} className="border-b border-border"><th className="w-28 px-3 py-3 text-left text-xs uppercase text-muted-foreground">{field}</th>{compareProducts.map((p) => <td key={p.slug} className="px-3 py-3 font-semibold text-foreground">{field === "price" ? money(p.price) : field === "stock" ? (p.stock > 0 ? `${p.stock} available` : "Out of stock") : String(p[field] || "—")}</td>)}</tr>)}</tbody></table></div></div></section>}
     </SiteLayout>
   );
 }

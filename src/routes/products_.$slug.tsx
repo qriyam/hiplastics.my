@@ -2,7 +2,7 @@ import { RouteError } from "@/components/RouteError";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, ShoppingCart, Zap, PackageX, PackageCheck, Star, Loader2, BellRing, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, ShoppingCart, Zap, PackageX, PackageCheck, Star, Loader2, BellRing, CheckCircle2, Download } from "lucide-react";
 import { useCart, money } from "@/lib/cart";
 import { SiteLayout } from "@/components/SiteLayout";
 import { ProductCard } from "@/components/ProductCard";
@@ -208,6 +208,11 @@ function ProductDetailPage() {
     navigate({ to: "/cart" });
   }
 
+  function downloadDatasheet() {
+    const text = ["HIPLASTICS MALAYSIA — PRODUCT DATASHEET", "", `Product: ${loc.name}`, `SKU: ${item.sku || "—"}`, `Category: ${item.category}`, `Price: MYR ${item.price.toFixed(2)}`, `Availability: ${inStock ? `${item.stock} available` : "Out of stock"}`, "", "DESCRIPTION", loc.description || "—", "", "KEY FEATURES", ...loc.features.map((f) => `• ${f}`)].join("\n");
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${item.slug}-datasheet.txt`; a.click(); URL.revokeObjectURL(a.href);
+  }
+
   return (
     <SiteLayout>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }} />
@@ -312,6 +317,8 @@ function ProductDetailPage() {
                   )}
                 </dl>
               )}
+
+              <button type="button" onClick={downloadDatasheet} className="mt-4 inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-semibold text-foreground hover:bg-secondary"><Download className="h-4 w-4" /> Download datasheet</button>
 
               {loc.features.length > 0 && (
                 <ul className="mt-6 space-y-2 text-sm">
