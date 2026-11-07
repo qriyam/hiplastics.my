@@ -29,7 +29,7 @@
 ## B2B growth foundations
 - [x] Inquiry/RFQ submissions persist as leads while retaining the WhatsApp handoff, and admins can update lead status and export CSV.
 - [x] Expired/failed online orders expose a safe “Pay again” path and the cart shows configured free-shipping progress; coupon guardrails remain open for a later UX pass.
-- [x] Product catalogue supports category, stock, price/name sorting, and pagination; datasheet/compare foundations remain open.
+- [x] Product catalogue supports category, stock, price/name sorting, pagination, up-to-three-product comparison, and client-generated datasheet downloads.
 - [ ] Account and admin foundations exist for saved addresses, low-stock and activity visibility; order export and packing-slip printing are available.
 
 
