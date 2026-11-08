@@ -65,8 +65,9 @@ export const getAdminAnalytics = createServerFn({ method: "POST" })
     if (!role) throw new Error("Not authorized — admin role required");
 
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kuala_Lumpur" }).format(new Date());
-    const [{ data: visits, error: visitsError }, { data: orderEmails, error: orderError }] = await Promise.all([
+    const [{ data: visits, error: visitsError }, { data: pageRows, error: pageError }, { data: orderEmails, error: orderError }] = await Promise.all([
       admin.from("visitor_daily").select("visitor_id, page_count, last_path, user_id, last_seen_at").eq("visit_date", today).order("last_seen_at", { ascending: false }),
+      admin.from("visitor_page_daily").select("path, page_count").eq("visit_date", today).order("page_count", { ascending: false }).limit(8),
       admin.from("orders").select("user_id, customer_email").limit(10000),
     ]);
     if (visitsError) throw new Error(visitsError.message);
@@ -94,7 +95,12 @@ export const getAdminAnalytics = createServerFn({ method: "POST" })
     }
 
     const pathCounts = new Map<string, number>();
-    for (const visit of visits ?? []) pathCounts.set(visit.last_path, (pathCounts.get(visit.last_path) || 0) + Number(visit.page_count || 0));
+    if (!pageError) {
+      for (const row of pageRows ?? []) pathCounts.set(String(row.path), Number(row.page_count || 0));
+    } else {
+      // Keep the panel compatible with projects that have only run the original migration.
+      for (const visit of visits ?? []) pathCounts.set(visit.last_path, (pathCounts.get(visit.last_path) || 0) + Number(visit.page_count || 0));
+    }
     return {
       today: {
         uniqueVisitors: visits?.length ?? 0,

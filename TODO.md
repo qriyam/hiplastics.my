@@ -36,7 +36,7 @@
 ## Visitor and account-lead analytics
 
 - [x] The admin sidebar includes a **Visitors & Leads** option under Sales.
-- [ ] The panel shows Malaysia-time today’s unique visitors, page views, signed-in visitors, and popular paths.
-- [ ] The panel lists registered Supabase Auth accounts that have no matching order by user ID or email, including name, email, registration date, and last sign-in date.
+- [x] The panel shows Malaysia-time today’s unique visitors, page views, signed-in visitors, and popular paths.
+- [x] The panel lists registered Supabase Auth accounts that have no matching order by user ID or email, including name, email, registration date, and last sign-in date.
 - [x] Visitor tracking stores one anonymous daily aggregate per browser ID and never exposes raw visitor data publicly.
 - [ ] The additive Supabase analytics migration is applied to the connected project and the admin panel reports live values after refresh.

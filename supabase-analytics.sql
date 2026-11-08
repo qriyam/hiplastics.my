@@ -15,6 +15,18 @@ create index if not exists hip_visitor_daily_user_idx on hiplastics.visitor_dail
 revoke all on hiplastics.visitor_daily from anon, authenticated;
 grant all on hiplastics.visitor_daily to service_role;
 
+create table if not exists hiplastics.visitor_page_daily (
+  visitor_id text not null,
+  visit_date date not null,
+  path text not null,
+  page_count int not null default 1,
+  last_seen_at timestamptz not null default now(),
+  primary key (visitor_id, visit_date, path)
+);
+create index if not exists hip_visitor_page_daily_date_idx on hiplastics.visitor_page_daily (visit_date desc, page_count desc);
+revoke all on hiplastics.visitor_page_daily from anon, authenticated;
+grant all on hiplastics.visitor_page_daily to service_role;
+
 create or replace function hiplastics.record_visit(p_visitor_id text, p_path text, p_user_id uuid default null)
 returns void
 language plpgsql
@@ -30,6 +42,12 @@ begin
     page_count = hiplastics.visitor_daily.page_count + 1,
     last_path = excluded.last_path,
     user_id = coalesce(excluded.user_id, hiplastics.visitor_daily.user_id),
+    last_seen_at = now();
+
+  insert into hiplastics.visitor_page_daily (visitor_id, visit_date, path, page_count, last_seen_at)
+  values (left(p_visitor_id, 100), malaysia_today, left(p_path, 300), 1, now())
+  on conflict (visitor_id, visit_date, path) do update set
+    page_count = hiplastics.visitor_page_daily.page_count + 1,
     last_seen_at = now();
 end;
 $$;
