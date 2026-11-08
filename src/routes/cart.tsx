@@ -8,7 +8,7 @@ import { SiteLayout } from "@/components/SiteLayout";
 import { useCart, money } from "@/lib/cart";
 import { useAuth } from "@/lib/auth";
 import { useLang } from "@/lib/i18n";
-import { quoteCart, placeOrder, cartStock } from "@/lib/shop.functions";
+import { quoteCart, placeOrder, cartStock, listSavedAddresses, type SavedAddress } from "@/lib/shop.functions";
 import { site } from "@/lib/site";
 import codLogo from "@/assets/payment-cod.png";
 import duitnowLogo from "@/assets/payment-duitnow.png";
@@ -46,6 +46,7 @@ function CartPage() {
   const quote = useServerFn(quoteCart);
   const submit = useServerFn(placeOrder);
   const stockCheck = useServerFn(cartStock);
+  const loadSavedAddresses = useServerFn(listSavedAddresses);
 
   const [form, setForm] = useState({
     customer_name: "", customer_email: "", customer_phone: "", company: "",
@@ -67,6 +68,7 @@ function CartPage() {
   const [couponMsg, setCouponMsg] = useState<{ type: "ok" | "error"; text: string } | null>(null);
   const [couponBusy, setCouponBusy] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
 
   const lines = items.map((i) => ({ slug: i.slug, qty: i.qty }));
   const linesKey = JSON.stringify(lines);
@@ -175,6 +177,25 @@ function CartPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  useEffect(() => {
+    if (!session?.access_token) { setSavedAddresses([]); return; }
+    let active = true;
+    loadSavedAddresses({ data: { access_token: session.access_token } }).then((r) => {
+      if (!active || !r.ok) return;
+      setSavedAddresses(r.addresses);
+      const preferred = r.addresses.find((a) => a.is_default) ?? r.addresses[0];
+      if (preferred && !form.address1) {
+        setForm((f) => ({ ...f, customer_name: f.customer_name || preferred.full_name, customer_phone: f.customer_phone || preferred.phone, company: f.company || preferred.company, address1: preferred.address1, address2: preferred.address2, city: preferred.city, state: preferred.state, postcode: preferred.postcode }));
+      }
+    }).catch(() => undefined);
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.access_token]);
+
+  function useSavedAddress(address: SavedAddress) {
+    setForm((f) => ({ ...f, customer_name: address.full_name, customer_phone: address.phone, company: address.company, address1: address.address1, address2: address.address2, city: address.city, state: address.state, postcode: address.postcode }));
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -309,7 +330,10 @@ function CartPage() {
                     </Link>
                   </div>
                 )}
-                <h2 className="text-lg font-bold text-foreground">{t("cart_delivery_details")}</h2>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="text-lg font-bold text-foreground">{t("cart_delivery_details")}</h2>
+                  {savedAddresses.length > 0 && <select aria-label="Use a saved delivery address" defaultValue="" onChange={(e) => { const address = savedAddresses.find((a) => a.id === e.target.value); if (address) useSavedAddress(address); e.currentTarget.value = ""; }} className="rounded-md border border-primary/40 bg-background px-3 py-2 text-sm font-semibold text-primary"><option value="">Use saved address…</option>{savedAddresses.map((address) => <option key={address.id} value={address.id}>{address.label}{address.is_default ? " (default)" : ""}</option>)}</select>}
+                </div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <input required placeholder={t("cart_full_name")} value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} className={inputCls} />
                   <input required type="email" placeholder={t("cart_email")} value={form.customer_email} onChange={(e) => setForm({ ...form, customer_email: e.target.value })} className={inputCls} />
