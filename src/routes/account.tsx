@@ -1,12 +1,12 @@
 import { RouteError } from "@/components/RouteError";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { LogOut, Loader2, Package, CheckCircle2, XCircle, Clock, Star } from "lucide-react";
+import { LogOut, Loader2, Package, CheckCircle2, XCircle, Clock, Star, MapPin } from "lucide-react";
 import { SiteLayout } from "@/components/SiteLayout";
 import { RatingStars } from "@/components/RatingStars";
 import { useAuth } from "@/lib/auth";
-import { myOrders, retryPayment, type OrderRow } from "@/lib/shop.functions";
+import { myOrders, retryPayment, listSavedAddresses, saveAddress, deleteAddress, type OrderRow, type SavedAddress } from "@/lib/shop.functions";
 import { myReviews, updateReview } from "@/lib/reviews.functions";
 import { money } from "@/lib/cart";
 import { site } from "@/lib/site";
@@ -50,8 +50,9 @@ function AccountPage() {
   const retry = useServerFn(retryPayment);
   const [orders, setOrders] = useState<OrderRow[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [tab, setTab] = useState<"orders" | "reviews">("orders");
+  const [tab, setTab] = useState<"orders" | "reviews" | "addresses">("orders");
   const [retrying, setRetrying] = useState<string | null>(null);
+  const [addresses, setAddresses] = useState<SavedAddress[] | null>(null);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login", search: { redirect: "/account" } });
@@ -66,9 +67,14 @@ function AccountPage() {
       if (r.ok) setOrders(r.orders);
       else setErr(r.error);
     };
+    const loadAddresses = async () => {
+      const r = await listSavedAddresses({ data: { access_token: session.access_token } });
+      if (active && r.ok) setAddresses(r.addresses);
+    };
     const onFocus = () => { void loadOrders(); };
     const onVisibility = () => { if (document.visibilityState === "visible") void loadOrders(); };
     void loadOrders();
+    void loadAddresses();
     const timer = window.setInterval(loadOrders, 30_000);
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisibility);
@@ -114,6 +120,13 @@ function AccountPage() {
                 className={`rounded px-4 py-1.5 text-sm font-semibold transition-colors ${tab === "reviews" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
               >
                 My Reviews
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab("addresses")}
+                className={`rounded px-4 py-1.5 text-sm font-semibold transition-colors ${tab === "addresses" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Addresses
               </button>
             </div>
             <button
@@ -165,9 +178,68 @@ function AccountPage() {
           )}
 
           {tab === "reviews" && <MyReviewsPanel accessToken={session?.access_token} />}
+          {tab === "addresses" && <SavedAddressesPanel accessToken={session?.access_token} addresses={addresses} onChanged={async () => { if (session?.access_token) { const r = await listSavedAddresses({ data: { access_token: session.access_token } }); if (r.ok) setAddresses(r.addresses); } }} />}
         </div>
       </section>
     </SiteLayout>
+  );
+}
+
+type AddressForm = Omit<SavedAddress, "id" | "created_at" | "updated_at">;
+const emptyAddress: AddressForm = { label: "Home", full_name: "", phone: "", company: "", address1: "", address2: "", city: "", state: "", postcode: "", is_default: false };
+
+function SavedAddressesPanel({ accessToken, addresses, onChanged }: { accessToken?: string; addresses: SavedAddress[] | null; onChanged: () => Promise<void> }) {
+  const save = useServerFn(saveAddress);
+  const remove = useServerFn(deleteAddress);
+  const [form, setForm] = useState<AddressForm>(emptyAddress);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const input = "w-full rounded-md border border-input bg-background px-3 py-2.5 text-sm outline-none focus:border-primary";
+
+  function edit(address: SavedAddress) {
+    setEditingId(address.id);
+    setForm({ label: address.label, full_name: address.full_name, phone: address.phone, company: address.company, address1: address.address1, address2: address.address2, city: address.city, state: address.state, postcode: address.postcode, is_default: address.is_default });
+    setErr(null);
+  }
+  function reset() { setEditingId(null); setForm(emptyAddress); setErr(null); }
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!accessToken) return;
+    setBusy(true); setErr(null);
+    const res = await save({ data: { access_token: accessToken, address: { ...form, id: editingId ?? undefined } } });
+    setBusy(false);
+    if (!res.ok) { setErr(res.error); return; }
+    reset(); await onChanged();
+  }
+  async function removeAddress(id: string) {
+    if (!accessToken || !window.confirm("Delete this saved address?")) return;
+    setBusy(true); const res = await remove({ data: { access_token: accessToken, id } }); setBusy(false);
+    if (!res.ok) setErr(res.error); else await onChanged();
+  }
+
+  return (
+    <div className="mt-5 space-y-5">
+      <div><h2 className="text-lg font-bold text-foreground">Saved addresses</h2><p className="mt-1 text-sm text-muted-foreground">Save your regular Malaysian delivery addresses for faster checkout.</p></div>
+      {err && <p className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive">{err}</p>}
+      <form onSubmit={submit} className="rounded-lg border border-border bg-card p-4 sm:p-5">
+        <div className="mb-4 flex items-center justify-between"><h3 className="font-semibold text-foreground">{editingId ? "Edit address" : "Add an address"}</h3>{editingId && <button type="button" onClick={reset} className="text-sm font-semibold text-primary hover:underline">Cancel</button>}</div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="text-sm font-medium">Label<input required maxLength={60} value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} className={input} placeholder="Home or Office" /></label>
+          <label className="text-sm font-medium">Full name<input required maxLength={120} value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} className={input} /></label>
+          <label className="text-sm font-medium">Malaysia phone<input required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={input} placeholder="01X XXX XXXX" /></label>
+          <label className="text-sm font-medium">Company (optional)<input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} className={input} /></label>
+          <label className="text-sm font-medium sm:col-span-2">Address line 1<input required value={form.address1} onChange={(e) => setForm({ ...form, address1: e.target.value })} className={input} /></label>
+          <label className="text-sm font-medium sm:col-span-2">Address line 2 (optional)<input value={form.address2} onChange={(e) => setForm({ ...form, address2: e.target.value })} className={input} /></label>
+          <label className="text-sm font-medium">City<input required value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className={input} /></label>
+          <label className="text-sm font-medium">State<input required value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} className={input} /></label>
+          <label className="text-sm font-medium">Postcode<input required pattern="[0-9]{5}" maxLength={5} value={form.postcode} onChange={(e) => setForm({ ...form, postcode: e.target.value })} className={input} /></label>
+        </div>
+        <label className="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={form.is_default} onChange={(e) => setForm({ ...form, is_default: e.target.checked })} /> Make this my default address</label>
+        <button disabled={busy} className="mt-4 inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60">{busy && <Loader2 className="h-4 w-4 animate-spin" />}{editingId ? "Save changes" : "Save address"}</button>
+      </form>
+      {addresses === null ? <div className="flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div> : addresses.length === 0 ? <div className="rounded-lg border border-border bg-card p-8 text-center text-sm text-muted-foreground">No saved addresses yet.</div> : <div className="grid gap-3 sm:grid-cols-2">{addresses.map((address) => <div key={address.id} className="rounded-lg border border-border bg-card p-4"><div className="flex items-start justify-between gap-3"><div className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><div><div className="font-semibold text-foreground">{address.label}{address.is_default && <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">DEFAULT</span>}</div><div className="mt-2 text-sm leading-relaxed text-muted-foreground">{address.full_name}<br />{address.address1}{address.address2 && <><br />{address.address2}</>}<br />{address.postcode} {address.city}, {address.state}<br />{address.phone}</div></div></div></div><div className="mt-3 flex gap-3 text-sm font-semibold"><button type="button" onClick={() => edit(address)} className="text-primary hover:underline">Edit</button><button type="button" disabled={busy} onClick={() => removeAddress(address.id)} className="text-destructive hover:underline disabled:opacity-60">Delete</button></div></div>)}</div>}
+    </div>
   );
 }
 

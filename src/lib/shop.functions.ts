@@ -139,6 +139,86 @@ export const myOrders = createServerFn({ method: "POST" })
     }
   });
 
+export type SavedAddress = {
+  id: string;
+  label: string;
+  full_name: string;
+  phone: string;
+  company: string;
+  address1: string;
+  address2: string;
+  city: string;
+  state: string;
+  postcode: string;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+const savedAddressSchema = z.object({
+  id: z.string().uuid().optional(),
+  label: z.string().min(1).max(60),
+  full_name: z.string().min(2).max(120),
+  phone: z.string().regex(/^(?:\+?60|0)1[0-9\-\s]{7,12}$/, "Enter a valid Malaysian mobile number."),
+  company: z.string().max(120).optional(),
+  address1: z.string().min(3).max(200),
+  address2: z.string().max(200).optional(),
+  city: z.string().min(2).max(80),
+  state: z.string().min(2).max(60),
+  postcode: z.string().regex(/^\d{5}$/, "Enter a valid 5-digit Malaysian postcode."),
+  is_default: z.boolean().default(false),
+});
+
+async function requireAccount(accessToken: string) {
+  const { getAdminClient } = await import("@/integrations/hiplastics/admin.server");
+  const admin = getAdminClient();
+  const { data, error } = await admin.auth.getUser(accessToken);
+  if (error || !data.user) throw new Error("Please sign in again.");
+  return { admin, user: data.user };
+}
+
+export const listSavedAddresses = createServerFn({ method: "POST" })
+  .inputValidator((d: { access_token: string }) => z.object({ access_token: z.string().min(10) }).parse(d))
+  .handler(async ({ data }) => {
+    try {
+      const { admin, user } = await requireAccount(data.access_token);
+      const { data: rows, error } = await admin.from("saved_addresses").select("*").eq("user_id", user.id).order("is_default", { ascending: false }).order("created_at", { ascending: false });
+      if (error) throw new Error(error.message);
+      return { ok: true as const, addresses: (rows ?? []) as SavedAddress[] };
+    } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Could not load saved addresses." }; }
+  });
+
+export const saveAddress = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => z.object({ access_token: z.string().min(10), address: savedAddressSchema }).parse(d))
+  .handler(async ({ data }) => {
+    try {
+      const { admin, user } = await requireAccount(data.access_token);
+      const { id, is_default, ...fields } = data.address;
+      const payload = { ...fields, company: fields.company || "", address2: fields.address2 || "", is_default: Boolean(is_default), user_id: user.id, updated_at: new Date().toISOString() };
+      if (payload.is_default) {
+        const { error } = await admin.from("saved_addresses").update({ is_default: false, updated_at: new Date().toISOString() }).eq("user_id", user.id);
+        if (error) throw new Error(error.message);
+      }
+      const query = id
+        ? admin.from("saved_addresses").update(payload).eq("id", id).eq("user_id", user.id).select("*").single()
+        : admin.from("saved_addresses").insert(payload).select("*").single();
+      const { data: row, error } = await query;
+      if (error) throw new Error(error.message);
+      return { ok: true as const, address: row as SavedAddress };
+    } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Could not save this address." }; }
+  });
+
+export const deleteAddress = createServerFn({ method: "POST" })
+  .inputValidator((d: { access_token: string; id: string }) => z.object({ access_token: z.string().min(10), id: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    try {
+      const { admin, user } = await requireAccount(data.access_token);
+      const { error } = await admin.from("saved_addresses").delete().eq("id", data.id).eq("user_id", user.id);
+      if (error) throw new Error(error.message);
+      return { ok: true as const };
+    } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Could not delete this address." }; }
+  });
+
 export const getOrder = createServerFn({ method: "POST" })
   .inputValidator((d: { orderNo: string; token?: string; email?: string }) =>
     z
