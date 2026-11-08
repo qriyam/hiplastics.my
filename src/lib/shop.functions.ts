@@ -318,6 +318,47 @@ export const saveCartSnapshot = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+export type CartSnapshotItem = { slug: string; name: string; qty: number };
+
+export const getCartSnapshot = createServerFn({ method: "POST" })
+  .inputValidator((d: { access_token: string }) => z.object({ access_token: z.string().min(10) }).parse(d))
+  .handler(async ({ data }) => {
+    try {
+      const { admin, user } = await requireAccount(data.access_token);
+      const { data: row, error } = await admin.from("cart_snapshots").select("items").eq("user_id", user.id).maybeSingle();
+      if (error) throw new Error(error.message);
+      const items = Array.isArray(row?.items) ? row.items : [];
+      return { ok: true as const, items: items as CartSnapshotItem[] };
+    } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Could not load your saved cart." }; }
+  });
+
+export const syncWishlist = createServerFn({ method: "POST" })
+  .inputValidator((d: { access_token: string; slugs: string[]; mode?: "merge" | "replace" }) => z.object({ access_token: z.string().min(10), slugs: z.array(z.string().min(1).max(200)).max(200), mode: z.enum(["merge", "replace"]).default("merge") }).parse(d))
+  .handler(async ({ data }) => {
+    try {
+      const { admin, user } = await requireAccount(data.access_token);
+      const incoming = Array.from(new Set(data.slugs));
+      let slugs = incoming;
+      if (data.mode === "merge") {
+        const { data: existing, error } = await admin.from("wishlists").select("slug").eq("user_id", user.id);
+        if (error) throw new Error(error.message);
+        slugs = Array.from(new Set([...(existing ?? []).map((row) => String(row.slug)), ...incoming]));
+      }
+      if (slugs.length) {
+        const { error: removeError } = await admin.from("wishlists").delete().eq("user_id", user.id).not("slug", "in", `(${slugs.map((slug) => `"${slug.replace(/"/g, "\\\"")}"`).join(",")})`);
+        if (removeError) throw new Error(removeError.message);
+      } else {
+        const { error } = await admin.from("wishlists").delete().eq("user_id", user.id);
+        if (error) throw new Error(error.message);
+      }
+      if (slugs.length) {
+        const { error } = await admin.from("wishlists").upsert(slugs.map((slug) => ({ user_id: user.id, slug })), { onConflict: "user_id,slug" });
+        if (error) throw new Error(error.message);
+      }
+      return { ok: true as const, slugs };
+    } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Could not sync your wishlist." }; }
+  });
+
 export const adminUpdateOrder = createServerFn({ method: "POST" })
   .inputValidator((d: Record<string, unknown>) =>
     z

@@ -424,7 +424,7 @@ function CartPage() {
 
               {q && Number(q.settings.free_shipping_over ?? 0) > 0 && (
                 <div className="mt-3 rounded-md bg-primary/5 p-3 text-xs">
-                  {q.subtotal >= Number(q.settings.free_shipping_over) ? <p className="font-semibold text-primary">You unlocked free shipping.</p> : <><p className="font-semibold text-foreground">Add {money(Number(q.settings.free_shipping_over) - q.subtotal, currency)} more for free shipping.</p><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-border"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, (q.subtotal / Number(q.settings.free_shipping_over)) * 100)}%` }} /></div></>}
+                  {q.subtotal >= Number(q.settings.free_shipping_over) ? <p className="font-semibold text-primary">You unlocked free shipping.</p> : <><div className="flex items-center justify-between gap-2"><p className="font-semibold text-foreground">Add {money(Number(q.settings.free_shipping_over) - q.subtotal, currency)} more for free shipping.</p><span className="shrink-0 font-semibold text-muted-foreground">{Math.round(Math.min(100, (q.subtotal / Number(q.settings.free_shipping_over)) * 100))}%</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-border"><div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${Math.min(100, (q.subtotal / Number(q.settings.free_shipping_over)) * 100)}%` }} /></div><p className="mt-1 text-[11px] text-muted-foreground">Free shipping on orders over {money(Number(q.settings.free_shipping_over), currency)}.</p></>}
                 </div>
               )}
 
@@ -438,15 +438,16 @@ function CartPage() {
                   <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
                     <input
                       placeholder={t("cart_coupon_placeholder")}
+                      maxLength={40}
                       value={couponInput}
-                      onChange={(e) => setCouponInput(e.target.value)}
+                      onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
                       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onApplyCoupon(); } }}
                       className={`${inputCls} min-w-0`}
                     />
                     <button
                       type="button"
                       onClick={onApplyCoupon}
-                      disabled={couponBusy || !couponInput.trim()}
+                      disabled={couponBusy || !couponInput.trim() || !q}
                       className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-semibold text-foreground hover:bg-secondary disabled:opacity-50"
                     >
                       {couponBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : t("cart_apply")}
@@ -454,7 +455,7 @@ function CartPage() {
                   </div>
                 )}
                 {couponMsg && (
-                  <p className={`mt-1.5 text-xs font-medium ${couponMsg.type === "ok" ? "text-primary" : "text-destructive"}`}>{couponMsg.text}</p>
+                  <p role="status" className={`mt-1.5 text-xs font-medium ${couponMsg.type === "ok" ? "text-primary" : "text-destructive"}`}>{couponMsg.text}</p>
                 )}
               </div>
 
