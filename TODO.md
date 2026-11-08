@@ -30,7 +30,7 @@
 - [x] Inquiry/RFQ submissions persist as leads while retaining the WhatsApp handoff, and admins can update lead status and export CSV.
 - [x] Expired/failed online orders expose a safe “Pay again” path and the cart shows configured free-shipping progress; coupon guardrails remain open for a later UX pass.
 - [x] Product catalogue supports category, stock, price/name sorting, pagination, up-to-three-product comparison, and client-generated datasheet downloads.
-- [x] Customer accounts can create, edit, delete, and set a default saved delivery address; order export and packing-slip printing are available. Checkout auto-fill remains a separate UX enhancement.
+- [x] Customer accounts can create, edit, delete, and set a default saved delivery address; order export and packing-slip printing are available. Checkout now auto-fills the default saved address and offers a saved-address selector.
 
 
 ## Visitor and account-lead analytics
