@@ -6,7 +6,7 @@ import {
   LogOut, Plus, Save, Trash2, Loader2, LayoutDashboard, Package, ShoppingBag, Tags,
   Factory, Images, FileDown, Newspaper, Settings as SettingsIcon, ServerCog, Menu,
   Search, Truck, CheckCircle2, RefreshCw, Download, X, Ticket, Star, Printer,
-  PackageCheck, XCircle, PackagePlus, ClipboardCheck, Users, Mail, Phone as PhoneIcon, BarChart3,
+  PackageCheck, XCircle, PackagePlus, ClipboardCheck, Users, Mail, Phone as PhoneIcon, BarChart3, History,
 } from "lucide-react";
 import { adminListOrders, adminUpdateOrder, type OrderRow, type OrderItemRow } from "@/lib/shop.functions";
 import { money } from "@/lib/cart";
@@ -24,6 +24,7 @@ import {
   updateSettings,
   uploadMedia,
   bulkUpsertProducts,
+  adminListAudit, type AdminAuditRow,
 } from "@/lib/cms.functions";
 import { parseCsv, toCsv, downloadCsv } from "@/lib/csv";
 import { getAdminAnalytics, type AdminAnalytics } from "@/lib/analytics.functions";
@@ -63,6 +64,7 @@ const NAV = [
   { key: "customers", label: "Customers", icon: Users, group: "Sales" },
   { key: "analytics", label: "Visitors & Leads", icon: BarChart3, group: "Sales" },
   { key: "rfq", label: "RFQ Leads", icon: Mail, group: "Sales" },
+  { key: "activity", label: "Activity Log", icon: History, group: "Sales" },
   { key: "products", label: "Products", icon: Package, group: "Catalogue" },
   { key: "categories", label: "Categories", icon: Tags, group: "Catalogue" },
   { key: "industries", label: "Industries", icon: Factory, group: "Catalogue" },
@@ -421,6 +423,7 @@ function Dashboard({ session, onSignOut }: { session: Session; onSignOut: () => 
   const listOrdersFn = useServerFn(adminListOrders);
   const loadAnalytics = useServerFn(getAdminAnalytics);
   const loadRfqLeads = useServerFn(adminListInquiryLeads);
+  const loadAudit = useServerFn(adminListAudit);
   const confirmDialog = useConfirm();
   const [tab, setTab] = useState<TabKey>("dashboard");
   const [navOpen, setNavOpen] = useState(false);
@@ -432,6 +435,8 @@ function Dashboard({ session, onSignOut }: { session: Session; onSignOut: () => 
   const [importBusy, setImportBusy] = useState(false);
   const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
   const [rfqLeads, setRfqLeads] = useState<Record<string, unknown>[]>([]);
+  const [auditRows, setAuditRows] = useState<AdminAuditRow[]>([]);
+  const [auditUnavailable, setAuditUnavailable] = useState(false);
 
   useEffect(() => {
     if (!navOpen) return;
@@ -443,17 +448,20 @@ function Dashboard({ session, onSignOut }: { session: Session; onSignOut: () => 
   async function refresh() {
     setBusy(true); setErr(null);
     try {
-      const [cms, ord, stats, leads] = await Promise.all([
+      const [cms, ord, stats, leads, audit] = await Promise.all([
         load({ data: { token: session.token } }),
         listOrdersFn({ data: { token: session.token } }).catch(() => ({ orders: [], items: [] })),
         loadAnalytics({ data: { token: session.token } }).catch(() => null),
         loadRfqLeads({ data: { token: session.token } }).catch(() => ({ leads: [] })),
+        loadAudit({ data: { token: session.token } }).catch(() => ({ rows: [], unavailable: true })),
       ]);
       setData(cms);
       setOrders(ord.orders as OrderRow[]);
       setOrderItems(ord.items as OrderItemRow[]);
       if (stats) setAnalytics(stats);
       setRfqLeads((leads as { leads?: Record<string, unknown>[] }).leads ?? []);
+      setAuditRows((audit as { rows?: AdminAuditRow[] }).rows ?? []);
+      setAuditUnavailable(Boolean((audit as { unavailable?: boolean }).unavailable));
     } catch (e) { setErr(e instanceof Error ? e.message : "Load failed"); }
     setBusy(false);
   }
@@ -574,6 +582,8 @@ function Dashboard({ session, onSignOut }: { session: Session; onSignOut: () => 
 
           {tab === "rfq" && <RfqLeadsPanel token={session.token} leads={rfqLeads} onChanged={refresh} />}
 
+          {tab === "activity" && <ActivityLogPanel rows={auditRows} unavailable={auditUnavailable} />}
+
           {data && (["products", "categories", "industries", "gallery", "downloads", "news", "coupons", "reviews"] as CrudKey[]).includes(tab as CrudKey) && (
             <CrudTable
               tab={tab as CrudKey}
@@ -638,6 +648,14 @@ function RfqLeadsPanel({ token, leads, onChanged }: { token: string; leads: Reco
   return <div className="space-y-4">
     <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-bold text-foreground">RFQ leads</h2><p className="text-sm text-muted-foreground">Website enquiries are saved here before the customer is handed off to WhatsApp.</p></div><button onClick={exportLeads} className="rounded-md border border-border px-3 py-2 text-xs font-semibold hover:bg-secondary">Export CSV</button></div>
     <div className="overflow-x-auto rounded-lg border border-border bg-card"><table className="w-full min-w-[950px] text-left text-sm"><thead className="border-b border-border bg-surface text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="px-4 py-3">Date</th><th className="px-4 py-3">Customer</th><th className="px-4 py-3">Company</th><th className="px-4 py-3">Interest</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Message</th><th className="px-4 py-3">Contact</th></tr></thead><tbody>{leads.map((lead) => <tr key={String(lead.id)} className="border-b border-border last:border-0"><td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">{new Date(String(lead.created_at)).toLocaleString()}</td><td className="px-4 py-3"><div className="font-semibold">{String(lead.name)}</div><div className="text-xs text-muted-foreground">{String(lead.email)}</div></td><td className="px-4 py-3">{String(lead.company)}</td><td className="px-4 py-3">{String(lead.interest)}</td><td className="px-4 py-3"><select value={String(lead.status || "new")} onChange={async (e) => { await updateLead({ data: { token, id: String(lead.id), status: e.target.value as typeof statuses[number] } }); await onChanged(); }} className="rounded border border-input bg-background px-2 py-1 text-xs">{statuses.map((s) => <option key={s} value={s}>{s}</option>)}</select></td><td className="max-w-sm px-4 py-3 text-xs text-muted-foreground">{String(lead.message)}</td><td className="px-4 py-3"><a className="text-xs font-semibold text-primary hover:underline" href={`mailto:${encodeURIComponent(String(lead.email))}`}>Email</a><br /><a className="text-xs font-semibold text-primary hover:underline" href={`tel:${encodeURIComponent(String(lead.phone))}`}>{String(lead.phone)}</a></td></tr>)}{leads.length === 0 && <tr><td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">No RFQ leads yet.</td></tr>}</tbody></table></div>
+  </div>;
+}
+
+function ActivityLogPanel({ rows, unavailable }: { rows: AdminAuditRow[]; unavailable: boolean }) {
+  if (unavailable) return <div className="rounded-lg border border-amber-300 bg-amber-50 p-5 text-sm text-amber-900">Activity log is not available yet. Run the latest Supabase setup migration, then refresh this page.</div>;
+  return <div className="space-y-4">
+    <div><h2 className="text-lg font-bold text-foreground">Activity log</h2><p className="mt-1 text-sm text-muted-foreground">Recent order status and payment changes made by administrators.</p></div>
+    <div className="overflow-x-auto rounded-lg border border-border bg-card"><table className="w-full min-w-[900px] text-left text-sm"><thead className="border-b border-border bg-surface text-[11px] uppercase tracking-wide text-muted-foreground"><tr><th className="px-4 py-3">Time</th><th className="px-4 py-3">Order</th><th className="px-4 py-3">Fulfilment</th><th className="px-4 py-3">Payment</th><th className="px-4 py-3">Changes</th><th className="px-4 py-3">Actor</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id} className="border-b border-border last:border-0"><td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">{new Date(row.created_at).toLocaleString()}</td><td className="px-4 py-3 font-semibold text-primary">{row.order_no}</td><td className="px-4 py-3 text-xs">{row.previous_status || "—"} → <strong>{row.new_status || row.previous_status || "—"}</strong></td><td className="px-4 py-3 text-xs">{row.previous_payment_status || "—"} → <strong>{row.new_payment_status || row.previous_payment_status || "—"}</strong></td><td className="max-w-xs px-4 py-3 text-xs text-muted-foreground">{Object.keys(row.changes || {}).length ? Object.entries(row.changes || {}).map(([key, value]) => `${key}: ${String(value)}`).join(" · ") : "Status update"}</td><td className="px-4 py-3 font-mono text-[10px] text-muted-foreground">{row.actor_user_id ? row.actor_user_id.slice(0, 8) : "System"}</td></tr>)}{rows.length === 0 && <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">No admin activity recorded yet.</td></tr>}</tbody></table></div>
   </div>;
 }
 

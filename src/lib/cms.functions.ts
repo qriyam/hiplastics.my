@@ -212,6 +212,42 @@ export const fetchAdminData = createServerFn({ method: "POST" })
     };
   });
 
+export type AdminAuditRow = {
+  id: string;
+  order_id: string;
+  order_no: string;
+  actor_user_id: string | null;
+  previous_status: string | null;
+  new_status: string | null;
+  previous_payment_status: string | null;
+  new_payment_status: string | null;
+  changes: Record<string, unknown>;
+  created_at: string;
+};
+
+export const adminListAudit = createServerFn({ method: "POST" })
+  .inputValidator((d: { token: string }) => z.object({ token: z.string().min(10) }).parse(d))
+  .handler(async ({ data }) => {
+    const { admin } = await requireAdmin(data.token);
+    const { data: rows, error } = await admin
+      .from("order_status_audit")
+      .select("id, order_id, actor_user_id, previous_status, new_status, previous_payment_status, new_payment_status, changes, created_at")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) {
+      if (error.message.toLowerCase().includes("does not exist") || error.code === "42P01") return { rows: [] as AdminAuditRow[], unavailable: true };
+      throw new Error(error.message);
+    }
+    const ids = Array.from(new Set((rows ?? []).map((row) => row.order_id).filter(Boolean)));
+    const { data: orders, error: ordersError } = ids.length ? await admin.from("orders").select("id, order_no").in("id", ids) : { data: [], error: null };
+    if (ordersError) throw new Error(ordersError.message);
+    const orderNos = new Map((orders ?? []).map((order) => [String(order.id), String(order.order_no)]));
+    return {
+      rows: (rows ?? []).map((row) => ({ ...row, order_no: orderNos.get(String(row.order_id)) ?? String(row.order_id).slice(0, 8) })) as AdminAuditRow[],
+      unavailable: false,
+    };
+  });
+
 export const upsertRow = createServerFn({ method: "POST" })
   .inputValidator((d: { token: string; table: TableName; row: Record<string, unknown> }) =>
     z
