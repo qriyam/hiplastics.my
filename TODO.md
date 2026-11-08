@@ -30,7 +30,7 @@
 - [x] Inquiry/RFQ submissions persist as leads while retaining the WhatsApp handoff, and admins can update lead status and export CSV.
 - [x] Expired/failed online orders expose a safe “Pay again” path and the cart shows configured free-shipping progress; coupon guardrails remain open for a later UX pass.
 - [x] Product catalogue supports category, stock, price/name sorting, pagination, up-to-three-product comparison, and client-generated datasheet downloads.
-- [ ] Account and admin foundations exist for saved addresses, low-stock and activity visibility; order export and packing-slip printing are available.
+- [x] Customer accounts can create, edit, delete, and set a default saved delivery address; order export and packing-slip printing are available. Checkout auto-fill remains a separate UX enhancement.
 
 
 ## Visitor and account-lead analytics
@@ -39,4 +39,4 @@
 - [x] The panel shows Malaysia-time today’s unique visitors, page views, signed-in visitors, and popular paths.
 - [x] The panel lists registered Supabase Auth accounts that have no matching order by user ID or email, including name, email, registration date, and last sign-in date.
 - [x] Visitor tracking stores one anonymous daily aggregate per browser ID and never exposes raw visitor data publicly.
-- [ ] The additive Supabase analytics migration is applied to the connected project and the admin panel reports live values after refresh.
+- [ ] The additive Supabase analytics and saved-address migrations are applied to the connected project and the admin panel/account page report live values after refresh.
